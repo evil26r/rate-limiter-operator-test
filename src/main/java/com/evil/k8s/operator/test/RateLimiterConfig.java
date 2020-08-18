@@ -2,9 +2,7 @@ package com.evil.k8s.operator.test;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
-import com.fasterxml.jackson.annotation.JsonPropertyDescription;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
-import com.fasterxml.jackson.databind.annotation.JsonSerialize;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Namespaced;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
@@ -20,9 +18,11 @@ import java.util.List;
 @JsonDeserialize
 public class RateLimiterConfig implements HasMetadata, Namespaced {
 
-    private String kind;
+    @Builder.Default
+    private String kind = "RateLimiterConfig";
 
-    private String apiVersion;
+    @Builder.Default
+    private String apiVersion = "operators.example.com/v1";
 
     @JsonInclude(JsonInclude.Include.NON_ABSENT)
     private WorkloadSelector workloadSelector;
@@ -30,6 +30,7 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     @JsonInclude(JsonInclude.Include.NON_ABSENT)
     private ObjectMeta metadata;
 
+    @JsonInclude(JsonInclude.Include.NON_ABSENT)
     private RateLimiterConfigSpec spec;
 
     @Data
@@ -37,7 +38,7 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
-    private static class RateLimiterConfigSpec {
+    public static class RateLimiterConfigSpec {
         private String applyTo;
         private String host;
         private int port;
@@ -50,8 +51,9 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
-    private static class RateLimitProperty {
+    public static class RateLimitProperty {
         private List<RateLimiterConfigDescriptors> descriptors;
+        private String domain;
     }
 
     @Data
@@ -59,7 +61,7 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
-    private static class RateLimiterConfigDescriptors {
+    public static class RateLimiterConfigDescriptors {
         private String key;
         private String value;
         @JsonProperty("rate_limit")
@@ -72,7 +74,7 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
-    private static class RateLimit {
+    public static class RateLimit {
         @JsonProperty("requests_per_unit")
         private int requestsPerUnit;
         private String unit;
