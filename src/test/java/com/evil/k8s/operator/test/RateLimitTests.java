@@ -18,6 +18,7 @@ import java.util.concurrent.TimeUnit;
 
 
 import static org.junit.jupiter.api.Assertions.*;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 
 
 public class RateLimitTests extends K8sRateLimitAbstractTest {
@@ -97,31 +98,11 @@ public class RateLimitTests extends K8sRateLimitAbstractTest {
 
         RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
 
-        //VIRTUAL_HOST
-        EnvoyConfigObjectPatch envoyFilterConfigPatchesVirtualHost = envoyFilter.getSpec().getConfigPatches()
-                .stream().filter(i -> i.getApplyTo().name().equals("VIRTUAL_HOST")).findFirst().get();
-        assertEquals(rateLimiterConfig.getSpec().getApplyTo(), envoyFilterConfigPatchesVirtualHost
-                .getMatch().getContext().name()); // check context: GATEWAY
-
-        // check routeConfiguration->vhost->name
-        RouteConfigurationObjectTypes routeConfigurationObjectTypes =
-                (RouteConfigurationObjectTypes) envoyFilterConfigPatchesVirtualHost.getMatch().getObjectTypes();
-        assertEquals(rateLimiterConfig.getSpec().getHost() + ":" + rateLimiterConfig.getSpec()
-                .getPort(), routeConfigurationObjectTypes.getRouteConfiguration().getVhost().getName());
-
-        assertEquals("MERGE", envoyFilterConfigPatchesVirtualHost.getPatch()
-                .getOperation().name()); // check operation: MERGE
-
-        // patch -> value -> rate_limits->actions->request_headers->{descriptor_key, header_name}
-        assertEquals(true, envoyFilterConfigPatchesVirtualHost.getPatch().getValue()
-                .toString().contains("descriptor_key=RateLimiterConfigDescriptors")); // check descriptor_key
-        assertEquals(true, envoyFilterConfigPatchesVirtualHost.getPatch()
-                .getValue().toString().contains("header_name=RateLimiterConfigDescriptors")); // check header_name
-
         //applyTo: HTTP_FILTER
         EnvoyConfigObjectPatch envoyFilterConfigPatchesHttpFilter = envoyFilter.getSpec().getConfigPatches()
                 .stream().filter(i -> i.getApplyTo().name().equals("HTTP_FILTER")).findFirst().get();
-        // check context: GATEWAY
+
+        // check→ context: GATEWAY
         assertEquals(rateLimiterConfig.getSpec().getApplyTo(),
                 envoyFilterConfigPatchesHttpFilter.getMatch().getContext().name());
 
@@ -138,13 +119,14 @@ public class RateLimitTests extends K8sRateLimitAbstractTest {
         assertEquals("INSERT_BEFORE", envoyFilterConfigPatchesHttpFilter.getPatch().getOperation().name());
 
         // patch -> value -> config -> {domain , ...->cluster_name}
-        assertEquals(true, envoyFilterConfigPatchesHttpFilter
-                .getPatch().getValue().toString().contains("domain=host-info")); // check domain
-        assertEquals(true, envoyFilterConfigPatchesHttpFilter
-                .getPatch().getValue().toString()
-                .contains("cluster_name=patched.rate-limiter.test-project.svc.cluster.local")); // check  cluster_name
-        assertEquals(true, envoyFilterConfigPatchesHttpFilter
-                .getPatch().getValue().toString().contains("timeout=0.25s")); // check  timeout
+        EnvoyHttpFilterPatch envoyRateLimit = objectMapper.convertValue(envoyFilterConfigPatchesHttpFilter.getPatch().getValue(), EnvoyHttpFilterPatch.class);
+        assertEquals("envoy.rate_limit", envoyRateLimit.getName());
+        assertEquals("host-info", envoyRateLimit.getConfig().getDomain());
+        assertEquals("patched.rate-limiter.test-project.svc.cluster.local", envoyRateLimit.getConfig().getRateLimitService().getGrpcService().getEnvoyGrpc().getCluster_name());
+        assertEquals("0.25s", envoyRateLimit.getConfig().getRateLimitService().getGrpcService().getTimeout());
+
+
+
 
         //applyTo: CLUSTER
         EnvoyConfigObjectPatch envoyFilterConfigPatchesCluster = envoyFilter.getSpec().getConfigPatches().stream()
@@ -165,8 +147,31 @@ public class RateLimitTests extends K8sRateLimitAbstractTest {
         assertEquals("MERGE", envoyFilterConfigPatchesCluster.getPatch().getOperation().name());
 
         // check patch->value->name
-        assertEquals(true, envoyFilterConfigPatchesCluster
-                .getPatch().getValue().toString().contains("name=patched.rate-limiter.test-project.svc.cluster.local"));
+       EnvoyClusterPatch envoyCluster = objectMapper.convertValue(envoyFilterConfigPatchesCluster.getPatch().getValue(), EnvoyClusterPatch.class);
+        assertEquals("patched.rate-limiter.test-project.svc.cluster.local", envoyCluster.getName());
+
+
+
+
+        //VIRTUAL_HOST
+        EnvoyConfigObjectPatch envoyFilterConfigPatchesVirtualHost = envoyFilter.getSpec().getConfigPatches()
+                .stream().filter(i -> i.getApplyTo().name().equals("VIRTUAL_HOST")).findFirst().get();
+        assertEquals(rateLimiterConfig.getSpec().getApplyTo(), envoyFilterConfigPatchesVirtualHost
+                .getMatch().getContext().name()); // check context: GATEWAY
+
+        // check routeConfiguration->vhost->name
+        RouteConfigurationObjectTypes routeConfigurationObjectTypes =
+                (RouteConfigurationObjectTypes) envoyFilterConfigPatchesVirtualHost.getMatch().getObjectTypes();
+        assertEquals(rateLimiterConfig.getSpec().getHost() + ":" + rateLimiterConfig.getSpec()
+                .getPort(), routeConfigurationObjectTypes.getRouteConfiguration().getVhost().getName());
+
+        assertEquals("MERGE", envoyFilterConfigPatchesVirtualHost.getPatch()
+                .getOperation().name()); // check operation: MERGE
+
+        // patch -> value -> rate_limits->actions->request_headers->{descriptor_key, header_name}
+        EnvoyGatewayPatch envoyClusterPatch = objectMapper.convertValue(envoyFilterConfigPatchesVirtualHost.getPatch().getValue(), EnvoyGatewayPatch.class);
+        assertEquals("RateLimiterConfigDescriptors", envoyClusterPatch.getRateLimits().get(0).getActions().get(0).getRequestHeaders().getDescriptionKey());
+        assertEquals("RateLimiterConfigDescriptors", envoyClusterPatch.getRateLimits().get(0).getActions().get(0).getRequestHeaders().getHeaderName());
 
     }
 
