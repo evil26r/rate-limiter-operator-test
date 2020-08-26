@@ -1,4 +1,4 @@
-package com.evil.k8s.operator.test;
+package com.evil.k8s.operator.test.models;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.annotation.JsonProperty;
