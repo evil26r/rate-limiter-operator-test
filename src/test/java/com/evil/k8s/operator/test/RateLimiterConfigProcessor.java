@@ -1,6 +1,9 @@
 package com.evil.k8s.operator.test;
 
-import com.evil.k8s.operator.test.models.*;
+import com.evil.k8s.operator.test.models.EnvoyClusterPatch;
+import com.evil.k8s.operator.test.models.EnvoyGatewayPatch;
+import com.evil.k8s.operator.test.models.EnvoyHttpFilterPatch;
+import com.evil.k8s.operator.test.models.RateLimiterConfig;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
@@ -31,12 +34,13 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 @RequiredArgsConstructor
 public class RateLimiterConfigProcessor implements AutoCloseable {
 
+    private static final ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory());
+
     private final KubernetesClient client;
     private final String namespace;
 
     private List<RateLimiterConfig> rateLimiterConfigs = new LinkedList<>();
 
-    private static final ObjectMapper yamlMapper = new ObjectMapper(new YAMLFactory());
     private RateLimiterConfig currentRateLimiterConfig;
 
 
@@ -45,7 +49,7 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         currentRateLimiterConfig = rateLimiterConfig;
         rateLimiterConfigs.add(rateLimiterConfig);
         client.customResource(rateLimitConfigCrdContext)
-                .create(rateLimiterConfig.getMetadata().getNamespace(), yamlMapper.writeValueAsString(rateLimiterConfig));
+                .create(rateLimiterConfig.getMetadata().getNamespace(), YAML_MAPPER.writeValueAsString(rateLimiterConfig));
         return this;
     }
 
@@ -54,7 +58,7 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         Map<String, Object> stringObjectMap = client
                 .customResource(rateLimitConfigCrdContext)
                 .get(currentRateLimiterConfig.getMetadata().getNamespace(), currentRateLimiterConfig.getMetadata().getName());
-        RateLimiterConfig rateLimiterConfig = yamlMapper.convertValue(stringObjectMap, RateLimiterConfig.class);
+        RateLimiterConfig rateLimiterConfig = YAML_MAPPER.convertValue(stringObjectMap, RateLimiterConfig.class);
         assertEquals(currentRateLimiterConfig, rateLimiterConfig);
         return this;
     }
@@ -69,13 +73,13 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
                 .get(currentRateLimiterConfig.getMetadata().getName() + ".yaml");
         assertNotNull(configMapDescriptors, "Config map data is Null!");
         RateLimiterConfig.RateLimitProperty configMapRateLimitProperty =
-                yamlMapper.readValue(configMapDescriptors, RateLimiterConfig.RateLimitProperty.class);
+                YAML_MAPPER.readValue(configMapDescriptors, RateLimiterConfig.RateLimitProperty.class);
         assertEquals(configMapRateLimitProperty, currentRateLimiterConfig.getSpec().getRateLimitProperty());
 
         List<String> domains = configMapResource.get().getData().values().stream()
                 .map(s -> {
                     try {
-                        return yamlMapper.readValue(configMapDescriptors, RateLimiterConfig.RateLimitProperty.class);
+                        return YAML_MAPPER.readValue(configMapDescriptors, RateLimiterConfig.RateLimitProperty.class);
                     } catch (JsonProcessingException e) {
                         throw new RuntimeException(e);
                     }
@@ -95,7 +99,7 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         Map<String, Object> stringObjectMap = client
                 .customResource(envoyFilterContext)
                 .get(namespace, rateLimiterConfigName);
-        EnvoyFilter envoyFilter = yamlMapper.convertValue(stringObjectMap, EnvoyFilter.class);
+        EnvoyFilter envoyFilter = YAML_MAPPER.convertValue(stringObjectMap, EnvoyFilter.class);
 
         //applyTo: HTTP_FILTER
         EnvoyConfigObjectPatch envoyFilterConfigPatchesHttpFilter = envoyFilter.getSpec().getConfigPatches().stream()
@@ -104,7 +108,7 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
                 .orElseThrow(() -> new IllegalStateException("Dont find HTTP_FILTER block from envoy filter"));
 
         // check→ context: GATEWAY
-        assertEquals(currentRateLimiterConfig.getSpec().getApplyTo(),
+        assertEquals(currentRateLimiterConfig.getSpec().getApplyTo().toString(),
                 envoyFilterConfigPatchesHttpFilter.getMatch().getContext().name());
 
         // match-> listener -> filterChain->filter-> {name, subFilter->name}
@@ -120,7 +124,7 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         assertEquals("INSERT_BEFORE", envoyFilterConfigPatchesHttpFilter.getPatch().getOperation().name());
 
         // patch -> value -> config -> {domain , ...->cluster_name}
-        EnvoyHttpFilterPatch envoyRateLimit = yamlMapper.convertValue(envoyFilterConfigPatchesHttpFilter.getPatch().getValue(), EnvoyHttpFilterPatch.class);
+        EnvoyHttpFilterPatch envoyRateLimit = YAML_MAPPER.convertValue(envoyFilterConfigPatchesHttpFilter.getPatch().getValue(), EnvoyHttpFilterPatch.class);
         assertEquals("envoy.rate_limit", envoyRateLimit.getName());
         assertEquals("host-info", envoyRateLimit.getConfig().getDomain());
         assertEquals("patched." + rateLimiterName + "." + namespace + ".svc.cluster.local",
@@ -143,26 +147,31 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         assertEquals("MERGE", envoyFilterConfigPatchesCluster.getPatch().getOperation().name());
 
         // check patch->value->name
-        EnvoyClusterPatch envoyCluster = yamlMapper.convertValue(envoyFilterConfigPatchesCluster.getPatch().getValue(), EnvoyClusterPatch.class);
+        EnvoyClusterPatch envoyCluster = YAML_MAPPER.convertValue(envoyFilterConfigPatchesCluster.getPatch().getValue(), EnvoyClusterPatch.class);
         assertEquals("patched." + rateLimiterName + "." + namespace + ".svc.cluster.local", envoyCluster.getName());
 
         //VIRTUAL_HOST
         EnvoyConfigObjectPatch envoyFilterConfigPatchesVirtualHost = envoyFilter.getSpec().getConfigPatches().stream()
                 .filter(i -> i.getApplyTo().name().equals("VIRTUAL_HOST")).findFirst()
                 .orElseThrow(() -> new IllegalStateException("Dont find VIRTUAL_HOST block from envoy filter"));
-        assertEquals(currentRateLimiterConfig.getSpec().getApplyTo(), envoyFilterConfigPatchesVirtualHost
+        assertEquals(currentRateLimiterConfig.getSpec().getApplyTo().toString(), envoyFilterConfigPatchesVirtualHost
                 .getMatch().getContext().name()); // check context: GATEWAY
 
         // check routeConfiguration->vhost->name
         RouteConfigurationObjectTypes routeConfigurationObjectTypes =
                 (RouteConfigurationObjectTypes) envoyFilterConfigPatchesVirtualHost.getMatch().getObjectTypes();
-        assertEquals(currentRateLimiterConfig.getSpec().getHost() + ":" + currentRateLimiterConfig.getSpec()
-                .getPort(), routeConfigurationObjectTypes.getRouteConfiguration().getVhost().getName());
+        switch (currentRateLimiterConfig.getSpec().getApplyTo()) {
+            case GATEWAY, ANY, SIDECAR_OUTBOUND -> assertEquals(currentRateLimiterConfig.getSpec().getHost() + ":" + currentRateLimiterConfig.getSpec()
+                    .getPort(), routeConfigurationObjectTypes.getRouteConfiguration().getVhost().getName());
+            case SIDECAR_INBOUND -> assertEquals("inbound|http|" + currentRateLimiterConfig.getSpec()
+                    .getPort(), routeConfigurationObjectTypes.getRouteConfiguration().getVhost().getName());
+        }
+
         // check operation: MERGE
         assertEquals("MERGE", envoyFilterConfigPatchesVirtualHost.getPatch().getOperation().name());
 
         // patch -> value -> rate_limits->actions->request_headers->{descriptor_key, header_name}
-        EnvoyGatewayPatch envoyClusterPatch = yamlMapper.convertValue(envoyFilterConfigPatchesVirtualHost.getPatch().getValue(), EnvoyGatewayPatch.class);
+        EnvoyGatewayPatch envoyClusterPatch = YAML_MAPPER.convertValue(envoyFilterConfigPatchesVirtualHost.getPatch().getValue(), EnvoyGatewayPatch.class);
         assertEquals(currentRateLimiterConfig.getSpec().getRateLimitProperty().getDescriptors().get(0).getKey(),
                 envoyClusterPatch.getRateLimits().get(0).getActions().get(0).getRequestHeaders().getDescriptionKey());
         assertEquals(currentRateLimiterConfig.getSpec().getRateLimitProperty().getDescriptors().get(0).getKey(),
@@ -206,6 +215,17 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         return this;
     }
 
-//    public RateLimiterConfigProcessor edit(Consumer<RateLimiterConfig> function) {
-//    }
+    @SneakyThrows
+    public RateLimiterConfigProcessor edit(Consumer<RateLimiterConfig> function) {
+        function.accept(currentRateLimiterConfig);
+        client.customResource(rateLimitConfigCrdContext)
+                .edit(currentRateLimiterConfig.getMetadata().getNamespace(), currentRateLimiterConfig.getMetadata().getName(),
+                        YAML_MAPPER.writeValueAsString(currentRateLimiterConfig));
+        try {
+            TimeUnit.MILLISECONDS.sleep(1_000);
+        } catch (Exception ex) {
+            log.error("", ex);
+        }
+        return this;
+    }
 }

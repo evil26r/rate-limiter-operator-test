@@ -2,7 +2,7 @@ package com.evil.k8s.operator.test;
 
 import com.evil.k8s.operator.test.models.RateLimiter;
 import com.evil.k8s.operator.test.models.RateLimiterConfig;
-import io.fabric8.kubernetes.api.model.*;
+import io.fabric8.kubernetes.api.model.ObjectMeta;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.snowdrop.istio.api.networking.v1alpha3.WorkloadSelector;
@@ -12,6 +12,9 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.TestMethodOrder;
 
 import java.util.Collections;
+
+import static com.evil.k8s.operator.test.models.RateLimiterConfig.Context.GATEWAY;
+import static com.evil.k8s.operator.test.models.RateLimiterConfig.Context.SIDECAR_INBOUND;
 
 
 //@SpringBootTest
@@ -32,7 +35,8 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                 RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(client, namespace);
                 RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(client, namespace);
         ) {
-            rateLimiterProcessor.create(rateLimiter)
+            rateLimiterProcessor
+                    .create(rateLimiter)
                     .validateRateLimiterDeployment()
                     .validateRedisDeployment()
                     .validateConfigMap()
@@ -41,14 +45,21 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                             .updateSpec(rateLimiterSpec -> rateLimiterSpec.setLogLevel("WARNING")))
                     .validateRateLimiterDeployment();
 
-            rateLimiterConfigProcessor.create(rateLimiterConfig)
+            rateLimiterConfigProcessor
+                    .create(rateLimiterConfig)
                     .delay(1_000)
-//                    .edit((rlConfig -> {
-//
-//                    }))
                     .validateRatelimiterConfig()
                     .validateConfigMap()
-                    .validateEnvoyFilter();
+                    .validateEnvoyFilter()
+                    .edit(rlConfig -> rlConfig
+                            .updateSpec(rateLimiterConfigSpec -> {
+                                rateLimiterConfigSpec.setApplyTo(SIDECAR_INBOUND);
+                                WorkloadSelector workloadSelector = new WorkloadSelector();
+                                workloadSelector.setLabels(Collections.singletonMap("app", "huapp"));
+                                rateLimiterConfigSpec.setWorkloadSelector(workloadSelector);
+                            }))
+                    .validateEnvoyFilter()
+                    .validateConfigMap();
         }
     }
 
@@ -86,7 +97,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
         rateLimitProperty.setDomain("host-info");
 
         RateLimiterConfig.RateLimiterConfigSpec rateLimiterConfigSpec = new RateLimiterConfig.RateLimiterConfigSpec();
-        rateLimiterConfigSpec.setApplyTo("GATEWAY");
+        rateLimiterConfigSpec.setApplyTo(GATEWAY);
         rateLimiterConfigSpec.setHost("host-info-srv.org");
         rateLimiterConfigSpec.setPort(80);
         rateLimiterConfigSpec.setRateLimiter("rate-limiter-test");

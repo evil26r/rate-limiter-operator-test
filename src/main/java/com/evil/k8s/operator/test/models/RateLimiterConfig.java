@@ -6,11 +6,15 @@ import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import io.fabric8.kubernetes.api.model.HasMetadata;
 import io.fabric8.kubernetes.api.model.Namespaced;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
-import lombok.*;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Data;
+import lombok.NoArgsConstructor;
 import me.snowdrop.istio.api.networking.v1alpha3.WorkloadSelector;
 
 import java.util.List;
 import java.util.Objects;
+import java.util.function.Consumer;
 
 @Data
 @NoArgsConstructor
@@ -31,12 +35,20 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     @JsonInclude(JsonInclude.Include.NON_ABSENT)
     private RateLimiterConfigSpec spec;
 
+    public RateLimiterConfig updateSpec(Consumer<RateLimiterConfigSpec> consumerSpec) {
+        if (spec == null) {
+            spec = new RateLimiterConfigSpec();
+        }
+        consumerSpec.accept(spec);
+        return this;
+    }
+
     @Data
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
     public static class RateLimiterConfigSpec {
-        private String applyTo;
+        private Context applyTo;
         private String host;
         private int port;
         private String rateLimiter;
@@ -93,5 +105,12 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     @Override
     public int hashCode() {
         return Objects.hash(kind, apiVersion, metadata, spec);
+    }
+
+    public enum Context {
+        GATEWAY,
+        SIDECAR_INBOUND,
+        SIDECAR_OUTBOUND,
+        ANY
     }
 }
