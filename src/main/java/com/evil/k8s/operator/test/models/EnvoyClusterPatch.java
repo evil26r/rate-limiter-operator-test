@@ -1,4 +1,4 @@
-package com.evil.k8s.operator.test;
+package com.evil.k8s.operator.test.models;
 
 import com.fasterxml.jackson.annotation.JsonInclude;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
@@ -15,5 +15,4 @@ import lombok.NoArgsConstructor;
 public class EnvoyClusterPatch {
     @JsonInclude(JsonInclude.Include.NON_ABSENT)
     private String name;
-
 }

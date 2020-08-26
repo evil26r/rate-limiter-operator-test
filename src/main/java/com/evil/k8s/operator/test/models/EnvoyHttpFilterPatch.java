@@ -1,4 +1,4 @@
-package com.evil.k8s.operator.test;
+package com.evil.k8s.operator.test.models;
 
 
 
@@ -20,9 +20,9 @@ import java.util.List;
 public class EnvoyHttpFilterPatch {
 
     @JsonInclude(JsonInclude.Include.NON_ABSENT)
-    EnvoyRateLimitConfig config;
+    private EnvoyRateLimitConfig config;
     @JsonInclude(JsonInclude.Include.NON_ABSENT)
-    String name;
+    private String name;
 
     @Data
     @Builder
@@ -30,15 +30,14 @@ public class EnvoyHttpFilterPatch {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class EnvoyRateLimitConfig{
-
-        String domain;
-        int stage;
-        String request_type;
-        String timeout;// -> google type Duration
-        Boolean failure_mode_deny;
-        Boolean rate_limited_as_resource_exhausted;
+        private String domain;
+        private int stage;
+        private String request_type;
+        private String timeout;
+        private Boolean failure_mode_deny;
+        private Boolean rate_limited_as_resource_exhausted;
         @JsonProperty("rate_limit_service")
-        RateLimitService rateLimitService;
+        private RateLimitService rateLimitService;
     }
 
 
@@ -50,7 +49,7 @@ public class EnvoyHttpFilterPatch {
     @AllArgsConstructor
     public static class RateLimitService{
         @JsonProperty("grpc_service")
-        GrpcService grpcService;
+        private GrpcService grpcService;
 
     }
 
@@ -61,12 +60,10 @@ public class EnvoyHttpFilterPatch {
     @AllArgsConstructor
     public static class GrpcService{
         @JsonProperty("envoy_grpc")
-        EnvoyGrpc envoyGrpc;
-        // @JsonProperty("google_grpc")
-        //  GoogleGrpc googleGrpc;
-        String timeout; // -> google type Duration
+        private EnvoyGrpc envoyGrpc;
+        private String timeout;
         @JsonProperty("initial_metadata")
-        List<HeaderValue> initialMetadata;
+        private List<HeaderValue> initialMetadata;
     }
 
     @Data
@@ -75,7 +72,7 @@ public class EnvoyHttpFilterPatch {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class EnvoyGrpc{
-        String cluster_name;
+        private String cluster_name;
     }
 
     @Data
@@ -84,7 +81,7 @@ public class EnvoyHttpFilterPatch {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class HeaderValue{
-        String key;
-        String value;
+        private String key;
+        private String value;
     }
 }

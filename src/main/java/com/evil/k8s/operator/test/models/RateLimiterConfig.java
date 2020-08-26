@@ -10,6 +10,7 @@ import lombok.*;
 import me.snowdrop.istio.api.networking.v1alpha3.WorkloadSelector;
 
 import java.util.List;
+import java.util.Objects;
 
 @Data
 @NoArgsConstructor
@@ -25,16 +26,12 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     private String apiVersion = "operators.example.com/v1";
 
     @JsonInclude(JsonInclude.Include.NON_ABSENT)
-    private WorkloadSelector workloadSelector;
-
-    @JsonInclude(JsonInclude.Include.NON_ABSENT)
     private ObjectMeta metadata;
 
     @JsonInclude(JsonInclude.Include.NON_ABSENT)
     private RateLimiterConfigSpec spec;
 
     @Data
-    @Builder
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
@@ -43,21 +40,23 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
         private String host;
         private int port;
         private String rateLimiter;
+        private boolean failureModeDeny;
         private RateLimitProperty rateLimitProperty;
+        @JsonInclude(JsonInclude.Include.NON_ABSENT)
+        private WorkloadSelector workloadSelector;
     }
 
     @Data
-    @Builder
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
     public static class RateLimitProperty {
+        @JsonInclude(JsonInclude.Include.NON_ABSENT)
         private List<RateLimiterConfigDescriptors> descriptors;
         private String domain;
     }
 
     @Data
-    @Builder
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
@@ -70,7 +69,6 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     }
 
     @Data
-    @Builder
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
@@ -78,5 +76,22 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
         @JsonProperty("requests_per_unit")
         private int requestsPerUnit;
         private String unit;
+    }
+
+    @Override
+    public boolean equals(Object o) {
+        if (this == o) return true;
+        if (o == null || getClass() != o.getClass()) return false;
+        RateLimiterConfig that = (RateLimiterConfig) o;
+        return Objects.equals(kind, that.kind) &&
+                Objects.equals(apiVersion, that.apiVersion) &&
+                Objects.equals(metadata.getName(), that.metadata.getName()) &&
+                Objects.equals(metadata.getNamespace(), that.metadata.getNamespace()) &&
+                Objects.equals(spec, that.spec);
+    }
+
+    @Override
+    public int hashCode() {
+        return Objects.hash(kind, apiVersion, metadata, spec);
     }
 }

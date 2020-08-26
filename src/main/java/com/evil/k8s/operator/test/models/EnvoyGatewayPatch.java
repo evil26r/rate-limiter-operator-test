@@ -1,4 +1,4 @@
-package com.evil.k8s.operator.test;
+package com.evil.k8s.operator.test.models;
 
 
 import com.fasterxml.jackson.annotation.JsonProperty;
@@ -25,8 +25,7 @@ public class EnvoyGatewayPatch {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class GatewayRateLimit{
-        List<RateLimitAction> actions;
-
+        private List<RateLimitAction> actions;
     }
 
     @Data
@@ -36,7 +35,7 @@ public class EnvoyGatewayPatch {
     @AllArgsConstructor
     public static class RateLimitAction{
         @JsonProperty("request_headers")
-        ActionRequestHeader requestHeaders;
+        private ActionRequestHeader requestHeaders;
     }
 
     @Data
@@ -46,8 +45,8 @@ public class EnvoyGatewayPatch {
     @AllArgsConstructor
     public static class ActionRequestHeader{
         @JsonProperty("descriptor_key")
-        String descriptionKey;
+        private String descriptionKey;
         @JsonProperty("header_name")
-        String headerName;
+        private String headerName;
     }
 }
