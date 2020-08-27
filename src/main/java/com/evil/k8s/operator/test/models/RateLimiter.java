@@ -75,6 +75,7 @@ public class RateLimiter {
 
     @Data
     @Builder
+    @Accessors(chain = true)
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor

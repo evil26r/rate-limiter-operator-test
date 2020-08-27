@@ -40,8 +40,6 @@ public class EnvoyHttpFilterPatch {
         private RateLimitService rateLimitService;
     }
 
-
-
     @Data
     @Builder
     @JsonDeserialize
@@ -50,7 +48,6 @@ public class EnvoyHttpFilterPatch {
     public static class RateLimitService{
         @JsonProperty("grpc_service")
         private GrpcService grpcService;
-
     }
 
     @Data

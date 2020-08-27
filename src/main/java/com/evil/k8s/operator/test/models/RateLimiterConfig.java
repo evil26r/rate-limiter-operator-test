@@ -10,6 +10,7 @@ import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 import me.snowdrop.istio.api.networking.v1alpha3.WorkloadSelector;
 
 import java.util.List;
@@ -44,6 +45,7 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     }
 
     @Data
+    @Accessors(chain = true)
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
@@ -59,6 +61,7 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     }
 
     @Data
+    @Accessors(chain = true)
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
@@ -69,6 +72,7 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     }
 
     @Data
+    @Accessors(chain = true)
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
@@ -81,6 +85,7 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
     }
 
     @Data
+    @Accessors(chain = true)
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor

@@ -1,5 +1,0 @@
-apiVersion: operators.example.com/v1
-kind: RateLimiter
-metadata:
-  name: rate-limiter-eq
-spec: {}
