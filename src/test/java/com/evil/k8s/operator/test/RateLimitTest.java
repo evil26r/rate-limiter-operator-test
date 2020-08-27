@@ -80,29 +80,27 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
         objectMeta.setName(rateLimiterName);
         objectMeta.setNamespace(namespace);
 
-        WorkloadSelector workloadSelector = new WorkloadSelector(Collections.singletonMap("app", "application-app"));
-
-        RateLimiterConfig.RateLimit rateLimit = new RateLimiterConfig.RateLimit();
-        rateLimit.setRequestsPerUnit(1);
-        rateLimit.setUnit("minute");
+        RateLimiterConfig.RateLimit rateLimit = new RateLimiterConfig.RateLimit()
+                .setRequestsPerUnit(1)
+                .setUnit("minute");
 
         RateLimiterConfig.RateLimiterConfigDescriptors rateLimiterConfigDescriptors =
-                new RateLimiterConfig.RateLimiterConfigDescriptors();
-        rateLimiterConfigDescriptors.setKey("header-key");
-        rateLimiterConfigDescriptors.setValue("header-val");
-        rateLimiterConfigDescriptors.setRateLimit(rateLimit);
+                new RateLimiterConfig.RateLimiterConfigDescriptors()
+                        .setKey("header-key").setValue("header-val")
+                        .setRateLimit(rateLimit);
 
-        RateLimiterConfig.RateLimitProperty rateLimitProperty = new RateLimiterConfig.RateLimitProperty();
-        rateLimitProperty.setDescriptors(Collections.singletonList(rateLimiterConfigDescriptors));
-        rateLimitProperty.setDomain("host-info");
+        RateLimiterConfig.RateLimitProperty rateLimitProperty = new RateLimiterConfig.RateLimitProperty()
+                .setDescriptors(Collections.singletonList(rateLimiterConfigDescriptors))
+                .setDomain("host-info");
 
-        RateLimiterConfig.RateLimiterConfigSpec rateLimiterConfigSpec = new RateLimiterConfig.RateLimiterConfigSpec();
-        rateLimiterConfigSpec.setApplyTo(GATEWAY);
-        rateLimiterConfigSpec.setHost("host-info-srv.org");
-        rateLimiterConfigSpec.setPort(80);
-        rateLimiterConfigSpec.setRateLimiter("rate-limiter-test");
-        rateLimiterConfigSpec.setRateLimitProperty(rateLimitProperty);
-        rateLimiterConfigSpec.setWorkloadSelector(workloadSelector);
+        RateLimiterConfig.RateLimiterConfigSpec rateLimiterConfigSpec =
+                new RateLimiterConfig.RateLimiterConfigSpec()
+                        .setApplyTo(GATEWAY)
+                        .setHost("host-info-srv.org")
+                        .setPort(80)
+                        .setRateLimiter("rate-limiter-test")
+                        .setRateLimitProperty(rateLimitProperty)
+                        .setWorkloadSelector(new WorkloadSelector(Collections.singletonMap("app", "application-app")));
 
         return RateLimiterConfig.builder()
                 .metadata(objectMeta)

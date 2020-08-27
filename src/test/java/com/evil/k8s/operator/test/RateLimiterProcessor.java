@@ -8,20 +8,23 @@ import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.fabric8.kubernetes.api.model.*;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.KubernetesClientException;
-import io.fabric8.kubernetes.client.Watcher;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import org.joda.time.IllegalInstantException;
 
 import java.io.IOException;
-import java.util.*;
-import java.util.concurrent.Semaphore;
+import java.util.Collection;
+import java.util.LinkedList;
+import java.util.List;
+import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
 import static com.evil.k8s.operator.test.CustomResourcesConstants.rateLimitCrdContext;
+import static com.evil.k8s.operator.test.utils.Utils.*;
+import static java.lang.Boolean.FALSE;
+import static java.lang.Boolean.TRUE;
 import static org.junit.jupiter.api.Assertions.*;
 
 @Slf4j
@@ -31,7 +34,6 @@ public class RateLimiterProcessor implements AutoCloseable {
 
     private final KubernetesClient client;
     private final String namespace;
-    private Map<String, Semaphore> locks = new HashMap();
     private List<RateLimiter> rateLimiters = new LinkedList<>();
 
     private RateLimiter currentRateLimiter;
@@ -40,60 +42,15 @@ public class RateLimiterProcessor implements AutoCloseable {
     public RateLimiterProcessor(KubernetesClient client, String namespace) {
         this.client = client;
         this.namespace = namespace;
-
-        client.customResource(rateLimitCrdContext)
-                .watch(namespace, new Watcher<>() {
-                    @SneakyThrows
-                    @Override
-                    public void eventReceived(Action action, String resource) {
-                        log.info("Action: [{}]; Resource: [{}]", action, resource);
-                        RateLimiter rateLimiters = YAML_MAPPER.readValue(resource, RateLimiter.class);
-                        locks.computeIfPresent(generateLockKey(rateLimiters), (s, semaphore) -> {
-                            log.info("Unlock: [{}]", s);
-                            semaphore.release();
-                            return semaphore;
-                        });
-                    }
-
-                    @Override
-                    public void onClose(KubernetesClientException cause) {
-                        log.info("Watcher Exception", cause);
-                    }
-                });
-
-        client.apps().deployments()
-                .watch(new Watcher<>() {
-                    @Override
-                    public void eventReceived(Action action, Deployment deployment) {
-                        log.info("Action: [{}]; Resource: [{}]", action, deployment);
-                        locks.computeIfPresent(generateLockKey(Deployment.class, deployment.getMetadata().getName()), (s, semaphore) -> {
-                            try {
-                                TimeUnit.SECONDS.sleep(1);
-                            } catch (InterruptedException e) {
-                                e.printStackTrace();
-                            }
-                            log.info("Unlock: [{}]", s);
-                            semaphore.release();
-                            return semaphore;
-                        });
-                    }
-
-                    @Override
-                    public void onClose(KubernetesClientException cause) {
-                        log.info("Watcher Exception", cause);
-                    }
-                });
     }
 
     @SneakyThrows
     public RateLimiterProcessor create(RateLimiter rateLimiter) {
         currentRateLimiter = rateLimiter;
         rateLimiters.add(rateLimiter);
-        locks.put(generateLockKey(rateLimiter), new Semaphore(0));
-        locks.put(generateLockKey(Deployment.class, rateLimiter.getMetadata().getName()), new Semaphore(0));
-        locks.put(generateLockKey(Deployment.class, rateLimiter.getMetadata().getName() + "-redis"), new Semaphore(0));
         client.customResource(rateLimitCrdContext)
                 .create(rateLimiter.getMetadata().getNamespace(), YAML_MAPPER.writeValueAsString(rateLimiter));
+        TimeUnit.MILLISECONDS.sleep(1_000);
         return this;
     }
 
@@ -103,9 +60,8 @@ public class RateLimiterProcessor implements AutoCloseable {
 
     @SneakyThrows
     public RateLimiterProcessor validateRateLimiterDeployment(RateLimiter rateLimiter) {
-        locks.get(generateLockKey(Deployment.class, rateLimiter.getMetadata().getName())).acquire(1);
         String name = rateLimiter.getMetadata().getName();
-        Deployment deployment = getDeployment(rateLimiter.getMetadata().getName());
+        Deployment deployment = getDeployment(name);
         assertEquals(1, deployment.getSpec().getReplicas());
 
         // Check environment
@@ -117,10 +73,10 @@ public class RateLimiterProcessor implements AutoCloseable {
 
         log.info("Check log level");
         assertEquals(rateLimiter.getSpec().getLogLevel(), collect.get("LOG_LEVEL"));
-        assertEquals("TCP", collect.get("REDIS_SOCKET_TYPE"));
-        assertEquals(name + "-redis" + ":6379", collect.get("REDIS_URL"));
-        assertEquals("true", collect.get("RUNTIME_IGNOREDOTFILES"));
-        assertEquals("false", collect.get("RUNTIME_WATCH_ROOT"));
+        assertEquals(TCP, collect.get("REDIS_SOCKET_TYPE"));
+        assertEquals(generateRedisName(name) + ":6379", collect.get("REDIS_URL"));
+        assertEquals(TRUE.toString(), collect.get("RUNTIME_IGNOREDOTFILES"));
+        assertEquals(FALSE.toString(), collect.get("RUNTIME_WATCH_ROOT"));
 
         String runtimeRoot = collect.get("RUNTIME_ROOT");
         String runtimeSubdirectory = collect.get("RUNTIME_SUBDIRECTORY");
@@ -133,7 +89,7 @@ public class RateLimiterProcessor implements AutoCloseable {
         assertNotNull(runtimeRoot);
         assertNotNull(runtimeSubdirectory);
 
-        assertEquals(runtimeRoot + "/" + runtimeSubdirectory + "/config", mountPath);
+        assertEquals(generateMountPath(runtimeRoot, runtimeSubdirectory), mountPath);
 
         //Check port
         assertTrue(containers.stream()
@@ -151,15 +107,16 @@ public class RateLimiterProcessor implements AutoCloseable {
         String name = rateLimiter.getMetadata().getName();
         Deployment redisDeployment = client.apps().deployments().list()
                 .getItems().stream()
-                .filter(deployment -> deployment.getMetadata().getName().equals(name + "-redis"))
-                .findFirst().orElseThrow(() -> new IllegalInstantException("Not exist redis deployment"));
+                .filter(deployment -> deployment.getMetadata().getName().equals(generateRedisName(name)))
+                .findFirst()
+                .orElseThrow(() -> new IllegalInstantException("Not exist redis deployment"));
 
         assertEquals(1, redisDeployment.getSpec().getReplicas());
 
         PodTemplateSpec template = redisDeployment.getSpec().getTemplate();
         template.getMetadata().getLabels().entrySet()
                 .stream()
-                .filter(stringStringEntry -> stringStringEntry.getKey().equals("app") && stringStringEntry.getValue().equals(name + "-redis"))
+                .filter(stringStringEntry -> stringStringEntry.getKey().equals("app") && stringStringEntry.getValue().equals(generateRedisName(name)))
                 .findAny().orElseThrow(() -> new IllegalStateException("Not exist label selector"));
 
         template.getSpec().getContainers()
@@ -177,14 +134,7 @@ public class RateLimiterProcessor implements AutoCloseable {
         client.customResource(rateLimitCrdContext)
                 .edit(currentRateLimiter.getMetadata().getNamespace(), currentRateLimiter.getMetadata().getName(),
                         YAML_MAPPER.writeValueAsString(currentRateLimiter));
-        locks.computeIfPresent(generateLockKey(currentRateLimiter), (s, semaphore) -> {
-            try {
-                semaphore.acquire();
-            } catch (InterruptedException e) {
-                e.printStackTrace();
-            }
-            return semaphore;
-        });
+        TimeUnit.MILLISECONDS.sleep(1_000);
         return this;
     }
 
@@ -223,7 +173,6 @@ public class RateLimiterProcessor implements AutoCloseable {
 
             assertEquals(distinctDomain.size(), allDomains.size(), "Exist not unique domains");
         }
-
         return this;
     }
 
@@ -236,7 +185,7 @@ public class RateLimiterProcessor implements AutoCloseable {
         int port = rateLimiter.getSpec().getPort();
         List<Service> serviceList = client.services().list().getItems().stream()
                 .filter(service -> service.getMetadata().getName().equals(name)
-                        || service.getMetadata().getName().equals(name + "-redis"))
+                        || service.getMetadata().getName().equals(generateRedisName(name)))
                 .collect(Collectors.toList());
         assertEquals(2, serviceList.size());
 
