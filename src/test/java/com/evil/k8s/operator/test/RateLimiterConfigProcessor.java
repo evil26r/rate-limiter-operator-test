@@ -7,26 +7,18 @@ import com.evil.k8s.operator.test.models.RateLimiterConfig;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
-import io.fabric8.kubernetes.api.model.ConfigMap;
-import io.fabric8.kubernetes.api.model.DoneableConfigMap;
-import io.fabric8.kubernetes.client.KubernetesClient;
-import io.fabric8.kubernetes.client.dsl.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.snowdrop.istio.api.networking.v1alpha3.*;
 
-import java.io.IOException;
 import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static com.evil.k8s.operator.test.CustomResourcesConstants.envoyFilterContext;
-import static com.evil.k8s.operator.test.CustomResourcesConstants.rateLimitConfigCrdContext;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
@@ -36,47 +28,37 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
 
     private static final ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory());
 
-    private final KubernetesClient client;
-    private final String namespace;
+    private final K8sRequester requester;
 
     private List<RateLimiterConfig> rateLimiterConfigs = new LinkedList<>();
 
     private RateLimiterConfig currentRateLimiterConfig;
 
 
-    @SneakyThrows
     public RateLimiterConfigProcessor create(RateLimiterConfig rateLimiterConfig) {
         currentRateLimiterConfig = rateLimiterConfig;
         rateLimiterConfigs.add(rateLimiterConfig);
-        client.customResource(rateLimitConfigCrdContext)
-                .create(rateLimiterConfig.getMetadata().getNamespace(), YAML_MAPPER.writeValueAsString(rateLimiterConfig));
+        requester.createRateLimiterConfig(rateLimiterConfig);
         return this;
     }
 
-    //ToDo: Раскомментировать
     public RateLimiterConfigProcessor validateRatelimiterConfig() {
-        Map<String, Object> stringObjectMap = client
-                .customResource(rateLimitConfigCrdContext)
-                .get(currentRateLimiterConfig.getMetadata().getNamespace(), currentRateLimiterConfig.getMetadata().getName());
-        RateLimiterConfig rateLimiterConfig = YAML_MAPPER.convertValue(stringObjectMap, RateLimiterConfig.class);
-        assertEquals(currentRateLimiterConfig, rateLimiterConfig);
+        assertEquals(currentRateLimiterConfig, requester.getRateLimiterConfig(currentRateLimiterConfig.getMetadata().getName()));
         return this;
     }
 
     @SneakyThrows
     public RateLimiterConfigProcessor validateConfigMap() {
-        Resource<ConfigMap, DoneableConfigMap> configMapResource = client.configMaps()
-                .inNamespace(currentRateLimiterConfig.getMetadata().getClusterName())
-                .withName(currentRateLimiterConfig.getSpec().getRateLimiter());
+        Map<String, String> configData = requester.getConfigMap(currentRateLimiterConfig.getMetadata().getName()).get().getData();
 
-        String configMapDescriptors = configMapResource.get().getData()
+        String configMapDescriptors = configData
                 .get(currentRateLimiterConfig.getMetadata().getName() + ".yaml");
         assertNotNull(configMapDescriptors, "Config map data is Null!");
         RateLimiterConfig.RateLimitProperty configMapRateLimitProperty =
                 YAML_MAPPER.readValue(configMapDescriptors, RateLimiterConfig.RateLimitProperty.class);
         assertEquals(configMapRateLimitProperty, currentRateLimiterConfig.getSpec().getRateLimitProperty());
 
-        List<String> domains = configMapResource.get().getData().values().stream()
+        List<String> domains = configData.values().stream()
                 .map(s -> {
                     try {
                         return YAML_MAPPER.readValue(configMapDescriptors, RateLimiterConfig.RateLimitProperty.class);
@@ -96,9 +78,7 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         String rateLimiterConfigName = currentRateLimiterConfig.getMetadata().getName();
         String rateLimiterName = currentRateLimiterConfig.getSpec().getRateLimiter();
 
-        Map<String, Object> stringObjectMap = client
-                .customResource(envoyFilterContext)
-                .get(namespace, rateLimiterConfigName);
+        Map<String, Object> stringObjectMap = requester.getEnvoyFilter(rateLimiterConfigName);
         EnvoyFilter envoyFilter = YAML_MAPPER.convertValue(stringObjectMap, EnvoyFilter.class);
 
         //applyTo: HTTP_FILTER
@@ -177,6 +157,8 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         assertEquals(currentRateLimiterConfig.getSpec().getRateLimitProperty().getDescriptors().get(0).getKey(),
                 envoyClusterPatch.getRateLimits().get(0).getActions().get(0).getRequestHeaders().getHeaderName());
 
+//        assertEquals(currentRateLimiterConfig.getSpec().getWorkloadSelector(), );
+
         return this;
     }
 
@@ -185,12 +167,6 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
     public void close() {
         rateLimiterConfigs.forEach(this::delete);
         rateLimiterConfigs.clear();
-    }
-
-    @SneakyThrows
-    public RateLimiterConfigProcessor delay(int delayMs) {
-        TimeUnit.MILLISECONDS.sleep(delayMs);
-        return this;
     }
 
     public RateLimiterConfigProcessor delete() {
@@ -203,29 +179,17 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
     }
 
     private RateLimiterConfigProcessor delete(String namespace, String name) {
-        try {
-            rateLimiterConfigs.removeIf(rateLimiterConfig -> rateLimiterConfig.getMetadata().getName().equals(name)
-                    && rateLimiterConfig.getMetadata().getNamespace().equals(namespace));
-            client.customResource(rateLimitConfigCrdContext)
-                    .delete(namespace, name);
-            log.warn("Rate limiter config: [{}] has deleted", name);
-        } catch (IOException e) {
-            log.warn("Rate limiter config: [{}] hasn't been deleted", name);
-        }
+        rateLimiterConfigs.removeIf(rateLimiterConfig -> rateLimiterConfig.getMetadata().getName().equals(name)
+                && rateLimiterConfig.getMetadata().getNamespace().equals(namespace));
+        requester.deleteRateLimiterConfig(name);
+        log.warn("Rate limiter config: [{}] has deleted", name);
         return this;
     }
 
     @SneakyThrows
     public RateLimiterConfigProcessor edit(Consumer<RateLimiterConfig> function) {
         function.accept(currentRateLimiterConfig);
-        client.customResource(rateLimitConfigCrdContext)
-                .edit(currentRateLimiterConfig.getMetadata().getNamespace(), currentRateLimiterConfig.getMetadata().getName(),
-                        YAML_MAPPER.writeValueAsString(currentRateLimiterConfig));
-        try {
-            TimeUnit.MILLISECONDS.sleep(1_000);
-        } catch (Exception ex) {
-            log.error("", ex);
-        }
+        requester.editRateLimiterConfig(currentRateLimiterConfig);
         return this;
     }
 }

@@ -23,7 +23,6 @@ import static com.evil.k8s.operator.test.models.RateLimiterConfig.Context.SIDECA
 class RateLimitTest extends K8sRateLimitAbstractTest {
 
     private final String namespace = "test-project";
-
     private final String rateLimiterName = "rate-limiter-test";
 
     @Test
@@ -31,12 +30,14 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
     public void createRateLimiter() {
         RateLimiter rateLimiter = preparedRateLimiter();
         RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
+        K8sRequester requester = new K8sRequester(client, namespace);
         try (
-                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(client, namespace);
-                RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(client, namespace);
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
+                RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
         ) {
             rateLimiterProcessor
                     .create(rateLimiter)
+                    .validateRateLimiter()
                     .validateRateLimiterDeployment()
                     .validateRedisDeployment()
                     .validateConfigMap()
@@ -47,7 +48,6 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
 
             rateLimiterConfigProcessor
                     .create(rateLimiterConfig)
-                    .delay(1_000)
                     .validateRatelimiterConfig()
                     .validateConfigMap()
                     .validateEnvoyFilter()
@@ -64,6 +64,48 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
     }
 
     @Test
+    @Order(1)
+    public void createRateLimiterWithOutWorkLoadSelector() {
+        RateLimiter rateLimiter = preparedRateLimiter();
+        RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
+        rateLimiterConfig.setSpec(rateLimiterConfig.getSpec().setWorkloadSelector(null));
+        K8sRequester requester = new K8sRequester(client, namespace);
+        try (
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
+                RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
+        ) {
+            rateLimiterProcessor
+                    .create(rateLimiter)
+                    .validateRateLimiterDeployment()
+                    .validateRedisDeployment()
+                    .validateConfigMap()
+                    .validateService()
+                    .edit($rateLimiter -> $rateLimiter
+                            .updateSpec(rateLimiterSpec -> rateLimiterSpec.setLogLevel("WARNING")))
+                    .validateRateLimiterDeployment();
+
+            rateLimiterConfigProcessor
+                    .create(rateLimiterConfig)
+                    .validateRatelimiterConfig()
+                    .validateConfigMap()
+                    .validateEnvoyFilter()
+                    .edit(rlConfig -> rlConfig
+                            .updateSpec(rateLimiterConfigSpec -> {
+                                WorkloadSelector workloadSelector = new WorkloadSelector();
+                                workloadSelector.setLabels(Collections.singletonMap("app", "huapp"));
+                                rateLimiterConfigSpec.setWorkloadSelector(workloadSelector);
+                            }))
+                    .validateEnvoyFilter()
+                    .validateConfigMap()
+                    .edit(rlConfig -> rlConfig
+                            .updateSpec(rateLimiterConfigSpec -> {
+                                rateLimiterConfigSpec.setWorkloadSelector(null);
+                            }))
+                    .validateEnvoyFilter();
+        }
+    }
+
+    @Test
     @SneakyThrows
     private RateLimiter preparedRateLimiter() {
         return new RateLimiter(client)
@@ -71,7 +113,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     objectMeta.setName(rateLimiterName);
                     objectMeta.setNamespace(namespace);
                 })
-                .setSpec(new RateLimiter.RateLimiterSpec(8088, "INFO"));
+                .setSpec(new RateLimiter.RateLimiterSpec(8088, 1, "INFO"));
     }
 
     @SneakyThrows

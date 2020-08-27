@@ -15,6 +15,7 @@ import lombok.experimental.Accessors;
 import java.util.Objects;
 import java.util.function.Consumer;
 
+import static com.evil.k8s.operator.test.utils.Utils.generateRedisName;
 import static com.fasterxml.jackson.annotation.JsonInclude.Include;
 
 @Data
@@ -68,7 +69,7 @@ public class RateLimiter {
     public Deployment getRedisDeployment(String namespace) {
         return client.apps().deployments().list().getItems()
                 .stream()
-                .filter(deployment -> deployment.getMetadata().getName().equals(getMetadata().getName() + "-redis"))
+                .filter(deployment -> deployment.getMetadata().getName().equals(generateRedisName(getMetadata().getName())))
                 .findFirst()
                 .orElseThrow(() -> new IllegalStateException("Non deployment"));
     }
@@ -81,6 +82,7 @@ public class RateLimiter {
     @AllArgsConstructor
     public static class RateLimiterSpec {
         private int port;
+        private int size;
         private String logLevel;
     }
 
