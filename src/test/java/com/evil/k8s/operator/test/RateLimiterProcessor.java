@@ -6,15 +6,12 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import io.fabric8.kubernetes.api.model.*;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import lombok.RequiredArgsConstructor;
-import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
-import static com.evil.k8s.operator.test.CustomResourcesConstants.rateLimitConfigCrdContext;
-import static com.evil.k8s.operator.test.K8sRequester.YAML_MAPPER;
 import static com.evil.k8s.operator.test.utils.Utils.*;
 import static java.lang.Boolean.FALSE;
 import static java.lang.Boolean.TRUE;

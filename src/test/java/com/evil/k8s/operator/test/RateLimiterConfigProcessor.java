@@ -5,8 +5,6 @@ import com.evil.k8s.operator.test.models.EnvoyGatewayPatch;
 import com.evil.k8s.operator.test.models.EnvoyHttpFilterPatch;
 import com.evil.k8s.operator.test.models.RateLimiterConfig;
 import com.fasterxml.jackson.core.JsonProcessingException;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -19,14 +17,13 @@ import java.util.Map;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
+import static com.evil.k8s.operator.test.utils.Utils.YAML_MAPPER;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 @Slf4j
 @RequiredArgsConstructor
 public class RateLimiterConfigProcessor implements AutoCloseable {
-
-    private static final ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory());
 
     private final K8sRequester requester;
 
@@ -157,7 +154,8 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         assertEquals(currentRateLimiterConfig.getSpec().getRateLimitProperty().getDescriptors().get(0).getKey(),
                 envoyClusterPatch.getRateLimits().get(0).getActions().get(0).getRequestHeaders().getHeaderName());
 
-//        assertEquals(currentRateLimiterConfig.getSpec().getWorkloadSelector(), );
+        //ToDo: Расскомментировать
+        assertEquals(currentRateLimiterConfig.getSpec().getWorkloadSelector(), envoyFilter.getSpec().getWorkloadSelector());
 
         return this;
     }

@@ -3,13 +3,11 @@ package com.evil.k8s.operator.test;
 import com.evil.k8s.operator.test.models.RateLimiter;
 import com.evil.k8s.operator.test.models.RateLimiterConfig;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.client.KubernetesClientException;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.snowdrop.istio.api.networking.v1alpha3.WorkloadSelector;
-import org.junit.jupiter.api.MethodOrderer;
-import org.junit.jupiter.api.Order;
 import org.junit.jupiter.api.Test;
-import org.junit.jupiter.api.TestMethodOrder;
 
 import java.util.Collections;
 
@@ -19,14 +17,16 @@ import static com.evil.k8s.operator.test.models.RateLimiterConfig.Context.SIDECA
 
 //@SpringBootTest
 @Slf4j
-@TestMethodOrder(MethodOrderer.OrderAnnotation.class)
 class RateLimitTest extends K8sRateLimitAbstractTest {
 
     private final String namespace = "test-project";
     private final String rateLimiterName = "rate-limiter-test";
 
+    /**
+     * Тест проверяет работу оператора.
+     * Создает 2 ресурса: RateLimiter и RateLimiterConfig, валидирует указанные значения и созданные оператором ресурсы
+     */
     @Test
-    @Order(1)
     public void createRateLimiter() {
         RateLimiter rateLimiter = preparedRateLimiter();
         RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
@@ -63,8 +63,10 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
         }
     }
 
+    /**
+     * Создание рейтлимитера без ворклоадер селектора, добавление и удаление селектора.
+     */
     @Test
-    @Order(1)
     public void createRateLimiterWithOutWorkLoadSelector() {
         RateLimiter rateLimiter = preparedRateLimiter();
         RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
@@ -102,6 +104,81 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                                 rateLimiterConfigSpec.setWorkloadSelector(null);
                             }))
                     .validateEnvoyFilter();
+        }
+    }
+
+    /**
+     * Создание рейтлимитер конфига без рейтлимитера.
+     * Ожидаемое поведение: При создании рейтлимитера - создадутся необходимые для работы ресурсы.
+     */
+    @Test
+    public void createRateLimiterConfigWithOutRateLimiter() {
+        RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
+        K8sRequester requester = new K8sRequester(client, namespace);
+        try (
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
+                RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
+        ) {
+            rateLimiterConfigProcessor
+                    .create(rateLimiterConfig)
+                    .validateRatelimiterConfig();
+            try {
+                rateLimiterConfigProcessor.validateEnvoyFilter();
+                throw new RuntimeException("RateLimiter doesn't exists, but exist EnvoyFilter");
+            } catch (KubernetesClientException ex) {
+                log.info("", ex);
+            }
+            rateLimiterProcessor
+                    .create(preparedRateLimiter())
+                    .validateRateLimiterDeployment()
+                    .validateRedisDeployment()
+                    .validateConfigMap()
+                    .validateService();
+
+            rateLimiterConfigProcessor
+                    .validateRatelimiterConfig()
+                    .validateEnvoyFilter()
+                    .validateConfigMap();
+        }
+    }
+
+    /**
+     * Пересоздание рейтлимитера и проверка, что конфиг мапа создалась заново.
+     */
+    @Test
+    public void recreateRateLimiterAndCheckConfigMap() {
+        RateLimiter rateLimiter = preparedRateLimiter();
+        RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
+        K8sRequester requester = new K8sRequester(client, namespace);
+        try (
+                RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
+        ) {
+            rateLimiterProcessor
+                    .create(rateLimiter)
+                    .validateRateLimiterDeployment()
+                    .validateRedisDeployment()
+                    .validateConfigMap()
+                    .validateService();
+
+            rateLimiterConfigProcessor
+                    .create(rateLimiterConfig)
+                    .validateRatelimiterConfig()
+                    .validateConfigMap()
+                    .validateEnvoyFilter()
+                    .validateEnvoyFilter()
+                    .validateConfigMap()
+                    .validateEnvoyFilter();
+
+            rateLimiterProcessor.delete()
+                    .create(rateLimiter)
+                    .validateRateLimiterDeployment()
+                    .validateRedisDeployment()
+                    .validateConfigMap()
+                    .validateService();
+
+            rateLimiterConfigProcessor
+                    .validateConfigMap();
         }
     }
 

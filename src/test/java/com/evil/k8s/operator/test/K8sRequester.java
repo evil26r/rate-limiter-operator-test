@@ -2,8 +2,6 @@ package com.evil.k8s.operator.test;
 
 import com.evil.k8s.operator.test.models.RateLimiter;
 import com.evil.k8s.operator.test.models.RateLimiterConfig;
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.fasterxml.jackson.dataformat.yaml.YAMLFactory;
 import io.fabric8.kubernetes.api.model.ConfigMap;
 import io.fabric8.kubernetes.api.model.DoneableConfigMap;
 import io.fabric8.kubernetes.api.model.Service;
@@ -20,12 +18,11 @@ import java.util.Map;
 import java.util.concurrent.TimeUnit;
 
 import static com.evil.k8s.operator.test.CustomResourcesConstants.*;
+import static com.evil.k8s.operator.test.utils.Utils.YAML_MAPPER;
 
 @Slf4j
 @RequiredArgsConstructor
 public class K8sRequester {
-
-    public static final ObjectMapper YAML_MAPPER = new ObjectMapper(new YAMLFactory());
 
     private final KubernetesClient client;
     private final String namespace;
