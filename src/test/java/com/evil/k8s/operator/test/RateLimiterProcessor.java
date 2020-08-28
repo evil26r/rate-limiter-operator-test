@@ -6,9 +6,11 @@ import com.fasterxml.jackson.core.JsonProcessingException;
 import io.fabric8.kubernetes.api.model.*;
 import io.fabric8.kubernetes.api.model.apps.Deployment;
 import lombok.RequiredArgsConstructor;
+import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -208,12 +210,16 @@ public class RateLimiterProcessor implements AutoCloseable {
         return this;
     }
 
-    public void deleteAdjacentFiles(){
-        requester.deleteConfigMap(currentRateLimiter.getMetadata().getName());
-        requester.deleteRateLimiterDeployment(currentRateLimiter.getMetadata().getName());
-        requester.deleteRedisDeployment(generateRedisName(currentRateLimiter.getMetadata().getName()));
-        requester.deleteRateLimiterService(currentRateLimiter.getMetadata().getName());
-        requester.deleteRedisService(generateRedisName(currentRateLimiter.getMetadata().getName()));
+    @SneakyThrows
+    public RateLimiterProcessor deleteControlledResources() {
+        String name = currentRateLimiter.getMetadata().getName();
+        requester.deleteConfigMap(name);
+        requester.deleteDeployment(name);
+        requester.deleteDeployment(generateRedisName(name));
+        requester.deleteService(name);
+        requester.deleteService(generateRedisName(name));
+        TimeUnit.MILLISECONDS.sleep(1_000);
+        return this;
     }
 
     @Override

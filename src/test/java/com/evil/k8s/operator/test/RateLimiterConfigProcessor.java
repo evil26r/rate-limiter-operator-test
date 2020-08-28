@@ -14,6 +14,7 @@ import java.util.HashSet;
 import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
 
@@ -46,19 +47,19 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
 
     @SneakyThrows
     public RateLimiterConfigProcessor validateConfigMap() {
-        Map<String, String> configData = requester.getConfigMap(currentRateLimiterConfig.getMetadata().getName()).get().getData();
+        Map<String, String> configData = requester.getConfigMap(currentRateLimiterConfig.getSpec().getRateLimiter()).get().getData();
 
         String configMapDescriptors = configData
                 .get(currentRateLimiterConfig.getMetadata().getName() + ".yaml");
-        assertNotNull(configMapDescriptors, "Config map data is Null!");
+        assertNotNull(configMapDescriptors, "Config map data is Null for file:" + currentRateLimiterConfig.getMetadata().getName());
         RateLimiterConfig.RateLimitProperty configMapRateLimitProperty =
                 YAML_MAPPER.readValue(configMapDescriptors, RateLimiterConfig.RateLimitProperty.class);
         assertEquals(configMapRateLimitProperty, currentRateLimiterConfig.getSpec().getRateLimitProperty());
 
         List<String> domains = configData.values().stream()
-                .map(s -> {
+                .map(descriptors -> {
                     try {
-                        return YAML_MAPPER.readValue(configMapDescriptors, RateLimiterConfig.RateLimitProperty.class);
+                        return YAML_MAPPER.readValue(descriptors, RateLimiterConfig.RateLimitProperty.class);
                     } catch (JsonProcessingException e) {
                         throw new RuntimeException(e);
                     }
@@ -103,7 +104,7 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         // patch -> value -> config -> {domain , ...->cluster_name}
         EnvoyHttpFilterPatch envoyRateLimit = YAML_MAPPER.convertValue(envoyFilterConfigPatchesHttpFilter.getPatch().getValue(), EnvoyHttpFilterPatch.class);
         assertEquals("envoy.rate_limit", envoyRateLimit.getName());
-        assertEquals("host-info", envoyRateLimit.getConfig().getDomain());
+        assertEquals(currentRateLimiterConfig.getSpec().getRateLimitProperty().getDomain(), envoyRateLimit.getConfig().getDomain());
         assertEquals("patched." + rateLimiterName + "." + namespace + ".svc.cluster.local",
                 envoyRateLimit.getConfig().getRateLimitService().getGrpcService().getEnvoyGrpc().getCluster_name());
         assertEquals("0.25s", envoyRateLimit.getConfig().getRateLimitService().getGrpcService().getTimeout());
@@ -163,7 +164,7 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
 
     @Override
     public void close() {
-        rateLimiterConfigs.forEach(this::delete);
+        rateLimiterConfigs.stream().forEach(this::delete);
         rateLimiterConfigs.clear();
     }
 
@@ -177,19 +178,19 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
     }
 
     private RateLimiterConfigProcessor delete(String namespace, String name) {
-        rateLimiterConfigs.removeIf(rateLimiterConfig -> rateLimiterConfig.getMetadata().getName().equals(name)
-                && rateLimiterConfig.getMetadata().getNamespace().equals(namespace));
         requester.deleteRateLimiterConfig(name);
-        log.warn("Rate limiter config: [{}] has deleted", name);
+        log.warn("Rate limiter config: [{}] was deleted", name);
         return this;
     }
 
-    public RateLimiterConfigProcessor deleteEnvoyFilter(){
+    @SneakyThrows
+    public RateLimiterConfigProcessor deleteEnvoyFilter() {
         requester.deleteEnvoyFilter(currentRateLimiterConfig.getMetadata().getName());
+        TimeUnit.MILLISECONDS.sleep(1_000);
         return this;
     }
 
-    public RateLimiterConfigProcessor editEnvoyFilter(){
+    public RateLimiterConfigProcessor editEnvoyFilter() {
         String rateLimiterConfigName = currentRateLimiterConfig.getMetadata().getName();
         String rateLimiterName = currentRateLimiterConfig.getSpec().getRateLimiter();
 
@@ -207,7 +208,6 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         envoyRateLimit.getConfig().getRateLimitService().getGrpcService().getEnvoyGrpc().setCluster_name("edited cluster name");
         envoyRateLimit.getConfig().getRateLimitService().getGrpcService().setTimeout("5s");
         envoyRateLimit.setName("new name");
-
         return this;
     }
 

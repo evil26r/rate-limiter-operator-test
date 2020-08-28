@@ -20,6 +20,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
 
     private final String namespace = "test-project";
     private final String rateLimiterName = "rate-limiter-test";
+    private K8sRequester requester = new K8sRequester(client, namespace);
 
     /**
      * Тест проверяет работу оператора.
@@ -29,7 +30,6 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
     public void createRateLimiter() {
         RateLimiter rateLimiter = preparedRateLimiter();
         RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
-        K8sRequester requester = new K8sRequester(client, namespace);
         try (
                 RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
                 RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
@@ -70,7 +70,6 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
         RateLimiter rateLimiter = preparedRateLimiter();
         RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
         rateLimiterConfig.setSpec(rateLimiterConfig.getSpec().setWorkloadSelector(null));
-        K8sRequester requester = new K8sRequester(client, namespace);
         try (
                 RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
                 RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
@@ -113,7 +112,6 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
     @Test
     public void createRateLimiterConfigWithOutRateLimiter() {
         RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
-        K8sRequester requester = new K8sRequester(client, namespace);
         try (
                 RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
                 RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
@@ -148,7 +146,6 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
     public void recreateRateLimiterAndCheckConfigMap() {
         RateLimiter rateLimiter = preparedRateLimiter();
         RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
-        K8sRequester requester = new K8sRequester(client, namespace);
         try (
                 RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
                 RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
@@ -182,42 +179,46 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
     }
 
 
+    /**
+     * Тест проверяет, что домены в файлах конфиг мапы уникальны.
+     */
     @Test
     @SneakyThrows
-    public void sameDomainsRateLimiterConfigs(){
-        K8sRequester requester = new K8sRequester(client, namespace);
+    public void sameDomainsRateLimiterConfigs() {
         RateLimiterConfig rateLimiterConfig1 = preparedRateLimiterConfig();
 
         RateLimiterConfig rateLimiterConfig2 = preparedRateLimiterConfig();
         rateLimiterConfig2.getMetadata().setName("new-rate-limiter-test");
+        rateLimiterConfig2.getSpec().getRateLimitProperty().setDomain("another-domain");
 
         RateLimiterConfig rateLimiterConfig3 = preparedRateLimiterConfig();
         rateLimiterConfig3.getMetadata().setName("another-new-rate-limiter-test");
-
-        rateLimiterConfig2.getSpec().getRateLimitProperty().setDomain("another-domain");
         rateLimiterConfig3.getSpec().getRateLimitProperty().setDomain("another-domain");
         try (
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
                 RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
         ) {
+            rateLimiterProcessor.create(preparedRateLimiter());
+
             rateLimiterConfigProcessor
                     .create(rateLimiterConfig1)
                     .create(rateLimiterConfig2)
-//                    .delay(1000)
                     .validateConfigMap()
                     .create(rateLimiterConfig3)
-//                    .delay(1000)
                     .validateConfigMap();
         }
     }
 
     @Test
     @SneakyThrows
-    public void editAllFieldsRateLimiterConfig(){
+    public void editAllFieldsRateLimiterConfig() {
         RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
-        K8sRequester requester = new K8sRequester(client, namespace);
         try (
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
                 RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
         ) {
+            rateLimiterProcessor.create(preparedRateLimiter());
+
             rateLimiterConfigProcessor
                     .create(rateLimiterConfig)
                     .validateRatelimiterConfig()
@@ -225,16 +226,16 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                             .updateSpec(rateLimiterConfigSpec -> {
                                 rateLimiterConfigSpec.setApplyTo(SIDECAR_INBOUND);
                                 rateLimiterConfigSpec.setHost("new-host.org");
-//                                rateLimiterConfigSpec.setPort(81);
+                                rateLimiterConfigSpec.setPort(81);
                                 WorkloadSelector workloadSelector = new WorkloadSelector();
                                 workloadSelector.setLabels(Collections.singletonMap("app", "huapp"));
                                 rateLimiterConfigSpec.setWorkloadSelector(workloadSelector);
 
                                 rateLimiterConfigSpec.getRateLimitProperty().setDomain("another-domain");
                                 rateLimiterConfigSpec.getRateLimitProperty().getDescriptors()
-                                        .forEach(d->d.setKey("new-header-key").setValue("new-header-val"));
+                                        .forEach(d -> d.setKey("new-header-key").setValue("new-header-val"));
                                 rateLimiterConfigSpec.getRateLimitProperty().getDescriptors()
-                                        .forEach(d->d.getRateLimit().setRequestsPerUnit(5));
+                                        .forEach(d -> d.getRateLimit().setRequestsPerUnit(5));
                             }))
                     .validateRatelimiterConfig()
                     .validateEnvoyFilter()
@@ -243,16 +244,16 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                             .updateSpec(rateLimiterConfigSpec -> {
                                 rateLimiterConfigSpec.setApplyTo(SIDECAR_OUTBOUND);
                                 rateLimiterConfigSpec.setHost("another-host.org");
-//                                rateLimiterConfigSpec.setPort(81);
+                                rateLimiterConfigSpec.setPort(81);
                                 WorkloadSelector workloadSelector = new WorkloadSelector();
                                 workloadSelector.setLabels(Collections.singletonMap("app", "huapp2"));
                                 rateLimiterConfigSpec.setWorkloadSelector(workloadSelector);
 
                                 rateLimiterConfigSpec.getRateLimitProperty().setDomain("different-domain");
                                 rateLimiterConfigSpec.getRateLimitProperty().getDescriptors()
-                                        .forEach(d->d.setKey("another-header-key").setValue("another-header-val"));
+                                        .forEach(d -> d.setKey("another-header-key").setValue("another-header-val"));
                                 rateLimiterConfigSpec.getRateLimitProperty().getDescriptors()
-                                        .forEach(d->d.getRateLimit().setRequestsPerUnit(10));
+                                        .forEach(d -> d.getRateLimit().setRequestsPerUnit(10));
                             }))
                     .validateRatelimiterConfig()
                     .validateEnvoyFilter()
@@ -262,46 +263,51 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
 
     @Test
     @SneakyThrows
-    public void deleteResources(){
-
-        RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
-        rateLimiterConfig.setSpec(rateLimiterConfig.getSpec().setWorkloadSelector(null));
-        K8sRequester requester = new K8sRequester(client, namespace);
+    public void deleteResources() {
         try (
                 RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
                 RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
         ) {
-            rateLimiterConfigProcessor.deleteEnvoyFilter();
-            rateLimiterProcessor.deleteAdjacentFiles();
-            Thread.sleep(20_000);
-            rateLimiterConfigProcessor.validateConfigMap()
+            rateLimiterProcessor
+                    .create(preparedRateLimiter())
+                    .validateRateLimiter()
+                    .deleteControlledResources();
+
+            rateLimiterConfigProcessor
+                    .create(preparedRateLimiterConfig())
+                    .validateRatelimiterConfig()
+                    .deleteEnvoyFilter();
+
+            rateLimiterConfigProcessor
+                    .validateConfigMap()
                     .validateEnvoyFilter();
 
-            rateLimiterProcessor.validateConfigMap()
+            rateLimiterProcessor
+                    .validateConfigMap()
                     .validateRateLimiterDeployment()
                     .validateRedisDeployment()
                     .validateService();
-
         }
     }
 
 
     @Test
     @SneakyThrows
-    public void editEnvoyFilter(){
-        K8sRequester requester = new K8sRequester(client, namespace);
+    public void editEnvoyFilter() {
         try (
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
                 RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
         ) {
-            rateLimiterConfigProcessor.editEnvoyFilter()
+            rateLimiterProcessor.create(preparedRateLimiter());
+            rateLimiterConfigProcessor
+                    .create(preparedRateLimiterConfig())
+                    .editEnvoyFilter()
                     .validateEnvoyFilter();
 
         }
     }
 
 
-    @Test
-    @SneakyThrows
     private RateLimiter preparedRateLimiter() {
         return new RateLimiter(client)
                 .updateMetadata(objectMeta -> {
@@ -311,7 +317,6 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                 .setSpec(new RateLimiter.RateLimiterSpec(8088, 1, "INFO"));
     }
 
-    @SneakyThrows
     private RateLimiterConfig preparedRateLimiterConfig() {
         ObjectMeta objectMeta = new ObjectMeta();
         objectMeta.setName(rateLimiterName);
@@ -343,7 +348,6 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                 .metadata(objectMeta)
                 .spec(rateLimiterConfigSpec)
                 .build();
-
     }
 
 }

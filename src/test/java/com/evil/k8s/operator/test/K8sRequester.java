@@ -12,7 +12,6 @@ import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
@@ -20,7 +19,6 @@ import java.util.stream.Collectors;
 
 import static com.evil.k8s.operator.test.CustomResourcesConstants.*;
 import static com.evil.k8s.operator.test.utils.Utils.YAML_MAPPER;
-import static com.evil.k8s.operator.test.utils.Utils.generateRedisName;
 
 @Slf4j
 @RequiredArgsConstructor
@@ -92,8 +90,9 @@ public class K8sRequester {
     public void deleteRateLimiter(String name) {
         try {
             client.customResource(rateLimitCrdContext).delete(namespace, name);
+            TimeUnit.MILLISECONDS.sleep(2_000);
             log.warn("Rate limiter: [{}] deleted", name);
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.warn("Rate limiter: [{}] hasn't been deleted", name);
         }
     }
@@ -101,8 +100,9 @@ public class K8sRequester {
     public void deleteRateLimiterConfig(String name) {
         try {
             client.customResource(rateLimitConfigCrdContext).delete(namespace, name);
+            TimeUnit.MILLISECONDS.sleep(2_000);
             log.warn("Rate limiter: [{}] deleted", name);
-        } catch (IOException e) {
+        } catch (Exception e) {
             log.warn("Rate limiter: [{}] hasn't been deleted", name);
         }
     }
@@ -113,65 +113,42 @@ public class K8sRequester {
     }
 
 
-    public void deleteRateLimiterDeployment(String name){
-        try{
-            Deployment deployment =getDeployment(name);
+    public void deleteDeployment(String name) {
+        try {
+            Deployment deployment = getDeployment(name);
             client.apps().deployments().delete(deployment);
             log.warn("Rate limiter Deployment: [{}] deleted", name);
-        } catch (Exception e){
+        } catch (Exception e) {
             log.warn("Rate limiter: [{}] hasn't been deleted", name);
         }
     }
 
-    public void deleteRedisDeployment(String name){
-        try{
-            Deployment deployment = getDeployment(generateRedisName(name));
-            client.apps().deployments().delete(deployment);
-            log.warn("Redis Deployment: [{}] deleted", name);
-        } catch (Exception e){
-            log.warn("Redis deployment: [{}] hasn't been deleted", name);
-        }
-    }
-
-    public void deleteEnvoyFilter(String name){
-        try{
+    public void deleteEnvoyFilter(String name) {
+        try {
             client.customResource(envoyFilterContext).delete(namespace, name);
             log.warn("EnvoyFilter: [{}] deleted", name);
-        } catch (Exception e){
+        } catch (Exception e) {
             log.warn("EnvoyFilter: [{}] hasn't been deleted", name);
         }
     }
 
-    public void deleteRateLimiterService(String name){
-        try{
-            List<Service> serviceList = getServices();
-            serviceList = serviceList.stream().filter(service -> service.getMetadata().getName().equals(name)).collect(Collectors.toList());
+    public void deleteService(String serviceName) {
+        try {
+            List<Service> serviceList = getServices().stream()
+                    .filter(service -> service.getMetadata().getName().equals(serviceName))
+                    .collect(Collectors.toList());
             client.services().delete(serviceList);
-
-            log.warn("RateLimiter Service : [{}] deleted", name);
-        } catch (Exception e){
-            log.warn("Service: [{}] hasn't been deleted", name);
+            log.warn("Service: [{}] deleted", serviceName);
+        } catch (Exception e) {
+            log.warn("Service: [{}] hasn't been deleted", serviceName);
         }
     }
 
-    public void deleteRedisService(String name){
-        try{
-            List<Service> serviceList = getServices();
-            serviceList = serviceList.stream().filter(service -> service.getMetadata().getName().equals(generateRedisName(name))).collect(Collectors.toList());
-            client.services().delete(serviceList);
-
-            log.warn("Redis Service : [{}] deleted", name);
-        } catch (Exception e){
-            log.warn("Redis Service: [{}] hasn't been deleted", name);
-        }
-    }
-
-    public void deleteConfigMap(String name){
-        try{
+    public void deleteConfigMap(String name) {
+        try {
             client.configMaps().delete(getConfigMap(name).get());
-
-            log.warn("ConfigMap : [{}] deleted", name);
-        } catch (Exception e){
+            log.warn("ConfigMap: [{}] deleted", name);
+        } catch (Exception e) {
             log.warn("ConfigMap: [{}] hasn't been deleted", name);
         }
     }
