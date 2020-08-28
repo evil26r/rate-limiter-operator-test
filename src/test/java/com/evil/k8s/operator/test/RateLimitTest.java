@@ -11,8 +11,7 @@ import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
 
-import static com.evil.k8s.operator.test.models.RateLimiterConfig.Context.GATEWAY;
-import static com.evil.k8s.operator.test.models.RateLimiterConfig.Context.SIDECAR_INBOUND;
+import static com.evil.k8s.operator.test.models.RateLimiterConfig.Context.*;
 
 
 //@SpringBootTest
@@ -181,6 +180,125 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .validateConfigMap();
         }
     }
+
+
+    @Test
+    @SneakyThrows
+    public void sameDomainsRateLimiterConfigs(){
+        K8sRequester requester = new K8sRequester(client, namespace);
+        RateLimiterConfig rateLimiterConfig1 = preparedRateLimiterConfig();
+
+        RateLimiterConfig rateLimiterConfig2 = preparedRateLimiterConfig();
+        rateLimiterConfig2.getMetadata().setName("new-rate-limiter-test");
+
+        RateLimiterConfig rateLimiterConfig3 = preparedRateLimiterConfig();
+        rateLimiterConfig3.getMetadata().setName("another-new-rate-limiter-test");
+
+        rateLimiterConfig2.getSpec().getRateLimitProperty().setDomain("another-domain");
+        rateLimiterConfig3.getSpec().getRateLimitProperty().setDomain("another-domain");
+        try (
+                RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
+        ) {
+            rateLimiterConfigProcessor
+                    .create(rateLimiterConfig1)
+                    .create(rateLimiterConfig2)
+//                    .delay(1000)
+                    .validateConfigMap()
+                    .create(rateLimiterConfig3)
+//                    .delay(1000)
+                    .validateConfigMap();
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void editAllFieldsRateLimiterConfig(){
+        RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
+        K8sRequester requester = new K8sRequester(client, namespace);
+        try (
+                RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
+        ) {
+            rateLimiterConfigProcessor
+                    .create(rateLimiterConfig)
+                    .validateRatelimiterConfig()
+                    .edit(rlConfig -> rlConfig
+                            .updateSpec(rateLimiterConfigSpec -> {
+                                rateLimiterConfigSpec.setApplyTo(SIDECAR_INBOUND);
+                                rateLimiterConfigSpec.setHost("new-host.org");
+//                                rateLimiterConfigSpec.setPort(81);
+                                WorkloadSelector workloadSelector = new WorkloadSelector();
+                                workloadSelector.setLabels(Collections.singletonMap("app", "huapp"));
+                                rateLimiterConfigSpec.setWorkloadSelector(workloadSelector);
+
+                                rateLimiterConfigSpec.getRateLimitProperty().setDomain("another-domain");
+                                rateLimiterConfigSpec.getRateLimitProperty().getDescriptors()
+                                        .forEach(d->d.setKey("new-header-key").setValue("new-header-val"));
+                                rateLimiterConfigSpec.getRateLimitProperty().getDescriptors()
+                                        .forEach(d->d.getRateLimit().setRequestsPerUnit(5));
+                            }))
+                    .validateRatelimiterConfig()
+                    .validateEnvoyFilter()
+                    .validateConfigMap()
+                    .edit(rlConfig -> rlConfig
+                            .updateSpec(rateLimiterConfigSpec -> {
+                                rateLimiterConfigSpec.setApplyTo(SIDECAR_OUTBOUND);
+                                rateLimiterConfigSpec.setHost("another-host.org");
+//                                rateLimiterConfigSpec.setPort(81);
+                                WorkloadSelector workloadSelector = new WorkloadSelector();
+                                workloadSelector.setLabels(Collections.singletonMap("app", "huapp2"));
+                                rateLimiterConfigSpec.setWorkloadSelector(workloadSelector);
+
+                                rateLimiterConfigSpec.getRateLimitProperty().setDomain("different-domain");
+                                rateLimiterConfigSpec.getRateLimitProperty().getDescriptors()
+                                        .forEach(d->d.setKey("another-header-key").setValue("another-header-val"));
+                                rateLimiterConfigSpec.getRateLimitProperty().getDescriptors()
+                                        .forEach(d->d.getRateLimit().setRequestsPerUnit(10));
+                            }))
+                    .validateRatelimiterConfig()
+                    .validateEnvoyFilter()
+                    .validateConfigMap();
+        }
+    }
+
+    @Test
+    @SneakyThrows
+    public void deleteResources(){
+
+        RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
+        rateLimiterConfig.setSpec(rateLimiterConfig.getSpec().setWorkloadSelector(null));
+        K8sRequester requester = new K8sRequester(client, namespace);
+        try (
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
+                RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
+        ) {
+            rateLimiterConfigProcessor.deleteEnvoyFilter();
+            rateLimiterProcessor.deleteAdjacentFiles();
+            Thread.sleep(20_000);
+            rateLimiterConfigProcessor.validateConfigMap()
+                    .validateEnvoyFilter();
+
+            rateLimiterProcessor.validateConfigMap()
+                    .validateRateLimiterDeployment()
+                    .validateRedisDeployment()
+                    .validateService();
+
+        }
+    }
+
+
+    @Test
+    @SneakyThrows
+    public void editEnvoyFilter(){
+        K8sRequester requester = new K8sRequester(client, namespace);
+        try (
+                RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
+        ) {
+            rateLimiterConfigProcessor.editEnvoyFilter()
+                    .validateEnvoyFilter();
+
+        }
+    }
+
 
     @Test
     @SneakyThrows

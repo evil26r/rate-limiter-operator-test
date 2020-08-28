@@ -184,6 +184,33 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         return this;
     }
 
+    public RateLimiterConfigProcessor deleteEnvoyFilter(){
+        requester.deleteEnvoyFilter(currentRateLimiterConfig.getMetadata().getName());
+        return this;
+    }
+
+    public RateLimiterConfigProcessor editEnvoyFilter(){
+        String rateLimiterConfigName = currentRateLimiterConfig.getMetadata().getName();
+        String rateLimiterName = currentRateLimiterConfig.getSpec().getRateLimiter();
+
+        Map<String, Object> stringObjectMap = requester.getEnvoyFilter(rateLimiterConfigName);
+        EnvoyFilter envoyFilter = YAML_MAPPER.convertValue(stringObjectMap, EnvoyFilter.class);
+
+        EnvoyConfigObjectPatch envoyFilterConfigPatchesHttpFilter = envoyFilter.getSpec().getConfigPatches().stream()
+                .filter(i -> i.getApplyTo().name().equals("HTTP_FILTER"))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Dont find HTTP_FILTER block from envoy filter"));
+
+        EnvoyHttpFilterPatch envoyRateLimit = YAML_MAPPER.convertValue(envoyFilterConfigPatchesHttpFilter.getPatch().getValue(), EnvoyHttpFilterPatch.class);
+        envoyRateLimit.getConfig().setDomain("another domain");
+        envoyRateLimit.getConfig().setFailure_mode_deny(false);
+        envoyRateLimit.getConfig().getRateLimitService().getGrpcService().getEnvoyGrpc().setCluster_name("edited cluster name");
+        envoyRateLimit.getConfig().getRateLimitService().getGrpcService().setTimeout("5s");
+        envoyRateLimit.setName("new name");
+
+        return this;
+    }
+
     @SneakyThrows
     public RateLimiterConfigProcessor edit(Consumer<RateLimiterConfig> function) {
         function.accept(currentRateLimiterConfig);

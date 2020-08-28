@@ -208,6 +208,14 @@ public class RateLimiterProcessor implements AutoCloseable {
         return this;
     }
 
+    public void deleteAdjacentFiles(){
+        requester.deleteConfigMap(currentRateLimiter.getMetadata().getName());
+        requester.deleteRateLimiterDeployment(currentRateLimiter.getMetadata().getName());
+        requester.deleteRedisDeployment(generateRedisName(currentRateLimiter.getMetadata().getName()));
+        requester.deleteRateLimiterService(currentRateLimiter.getMetadata().getName());
+        requester.deleteRedisService(generateRedisName(currentRateLimiter.getMetadata().getName()));
+    }
+
     @Override
     public void close() {
         rateLimiters.forEach(this::delete);
