@@ -19,6 +19,7 @@ import java.util.Map;
 
 import static com.evil.k8s.operator.test.models.RateLimiterConfig.Context.*;
 import static com.evil.k8s.operator.test.utils.Utils.YAML_MAPPER;
+import static com.evil.k8s.operator.test.utils.Utils.generateRedisName;
 
 
 //@SpringBootTest
@@ -336,7 +337,6 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                         envoyRateLimit.setName("new name");
                         envoyFilterConfigPatchesHttpFilter.getPatch().setValue(YAML_MAPPER.convertValue(envoyRateLimit, Map.class));
                         envoyFilter.getSpec().setConfigPatches(Collections.singletonList(envoyFilterConfigPatchesHttpFilter));
-                        return envoyFilter;
                     })
                     .validateEnvoyFilter();
         }
@@ -382,6 +382,62 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
         }
     }
 
+
+    /**
+     * Тест редактирует Deployment'ы и проверяет, что
+     * происходит откат изменений.
+     */
+    @Test
+    public void editDeployment(){
+        RateLimiter rateLimiter = preparedRateLimiter();
+        try (
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
+        ) {
+
+            rateLimiterProcessor
+                    .create(rateLimiter)
+                    .validateRateLimiterDeployment()
+                    .validateRedisDeployment()
+                    .editDeployment(rateLimiter.getMetadata().getName(), d->{
+                d.getSpec().setReplicas(5);
+                d.getMetadata().setName("new name deploy");
+                d.getSpec().getSelector().getMatchLabels().put("newkey", "newvalue");
+            })
+                    .validateRateLimiterDeployment()
+                    .editDeployment(generateRedisName(rateLimiter.getMetadata().getName()), d->{
+                d.getSpec().setReplicas(4);
+                d.getMetadata().setName("new REDIS name deploy");
+                d.getSpec().getSelector().getMatchLabels().put("newrediskey", "newredisvalue");
+            })
+                    .validateRedisDeployment();
+        }
+    }
+
+    /**
+     * Тест редактирует ConfigMap и проверяет, что
+     * происходит откат изменений.
+     */
+    @Test
+    @SneakyThrows
+    public void editConfigMap(){
+        RateLimiter rateLimiter = preparedRateLimiter();
+        RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
+        try (
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
+                RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
+        ) {
+            rateLimiterProcessor.create(rateLimiter);
+            rateLimiterConfigProcessor
+                    .create(rateLimiterConfig)
+                    .editConfigMap(rateLimiterConfig.getSpec().getRateLimiter(), cm->{
+//                        ????
+                     })
+                    .validateConfigMap();
+
+
+        }
+    }
+
     private RateLimiter preparedRateLimiter() {
         return new RateLimiter(client)
                 .updateMetadata(objectMeta -> {
@@ -423,5 +479,6 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                 .spec(rateLimiterConfigSpec)
                 .build();
     }
+
 
 }

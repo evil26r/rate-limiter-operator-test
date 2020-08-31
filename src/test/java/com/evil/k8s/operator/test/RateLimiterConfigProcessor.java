@@ -5,6 +5,9 @@ import com.evil.k8s.operator.test.models.EnvoyGatewayPatch;
 import com.evil.k8s.operator.test.models.EnvoyHttpFilterPatch;
 import com.evil.k8s.operator.test.models.RateLimiterConfig;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import io.fabric8.kubernetes.api.model.ConfigMap;
+import io.fabric8.kubernetes.api.model.DoneableConfigMap;
+import io.fabric8.kubernetes.client.dsl.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -188,11 +191,11 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         return this;
     }
 
-    public RateLimiterConfigProcessor editEnvoyFilter(UnaryOperator<EnvoyFilter> unaryOperator) {
+    public RateLimiterConfigProcessor editEnvoyFilter(Consumer<EnvoyFilter> consumer) {
         Map<String, Object> stringObjectMap = requester.getEnvoyFilter(currentRateLimiterConfig.getMetadata().getName());
         EnvoyFilter envoyFilter = YAML_MAPPER.convertValue(stringObjectMap, EnvoyFilter.class);
-        EnvoyFilter updatedEnvoyFilter = unaryOperator.apply(envoyFilter);
-        requester.editEnvoyFilter(updatedEnvoyFilter);
+        consumer.accept(envoyFilter);
+        requester.editEnvoyFilter(envoyFilter);
         return this;
     }
 
@@ -200,6 +203,15 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
     public RateLimiterConfigProcessor edit(Consumer<RateLimiterConfig> function) {
         function.accept(currentRateLimiterConfig);
         requester.editRateLimiterConfig(currentRateLimiterConfig);
+        return this;
+    }
+
+    public RateLimiterConfigProcessor editConfigMap(String name, Consumer<ConfigMap> configMapConsumer) {
+        Resource<ConfigMap, DoneableConfigMap> configMaps = requester.getConfigMap(name);
+        ConfigMap configMap = configMaps.get();
+        configMapConsumer.accept(configMap);
+        requester.editConfigMap(configMap);
+
         return this;
     }
 }

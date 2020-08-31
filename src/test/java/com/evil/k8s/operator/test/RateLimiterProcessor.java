@@ -263,4 +263,11 @@ public class RateLimiterProcessor implements AutoCloseable {
         requester.editService(updatedService);
         return this;
     }
+
+    public RateLimiterProcessor editDeployment(String name, Consumer<Deployment> deploymentConsumer){
+        Deployment deployment = requester.getDeployment(name);
+        deploymentConsumer.accept(deployment);
+        requester.editDeployment(deployment);
+        return this;
+    }
 }

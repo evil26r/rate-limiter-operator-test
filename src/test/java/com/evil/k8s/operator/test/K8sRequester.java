@@ -180,4 +180,18 @@ public class K8sRequester {
                 envoyFilter.getMetadata().getName(), YAML_MAPPER.writeValueAsString(envoyFilter));
         TimeUnit.MILLISECONDS.sleep(SLEEP_TIME_MS);
     }
+
+    @SneakyThrows
+    public void editDeployment(Deployment deployment){
+        client.apps().deployments().createOrReplace(deployment);
+        log.warn("Deployment: [{}] edited", deployment.getMetadata().getName());
+        TimeUnit.MILLISECONDS.sleep(SLEEP_TIME_MS);
+    }
+
+    @SneakyThrows
+    public void editConfigMap(ConfigMap configMap) {
+        client.configMaps().createOrReplace(configMap);
+        log.warn("Configmap: [{}] edited", configMap.getMetadata().getName());
+        TimeUnit.MILLISECONDS.sleep(SLEEP_TIME_MS);
+    }
 }
