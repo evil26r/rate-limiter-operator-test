@@ -1,17 +1,24 @@
 package com.evil.k8s.operator.test;
 
+import com.evil.k8s.operator.test.models.EnvoyHttpFilterPatch;
 import com.evil.k8s.operator.test.models.RateLimiter;
 import com.evil.k8s.operator.test.models.RateLimiterConfig;
+import io.fabric8.kubernetes.api.model.IntOrString;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
+import io.fabric8.kubernetes.api.model.ServicePort;
+import io.fabric8.kubernetes.api.model.ServiceSpec;
 import io.fabric8.kubernetes.client.KubernetesClientException;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import me.snowdrop.istio.api.networking.v1alpha3.EnvoyConfigObjectPatch;
 import me.snowdrop.istio.api.networking.v1alpha3.WorkloadSelector;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.Map;
 
 import static com.evil.k8s.operator.test.models.RateLimiterConfig.Context.*;
+import static com.evil.k8s.operator.test.utils.Utils.YAML_MAPPER;
 
 
 //@SpringBootTest
@@ -40,7 +47,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .validateRateLimiterDeployment()
                     .validateRedisDeployment()
                     .validateConfigMap()
-                    .validateService()
+                    .validateServices()
                     .edit($rateLimiter -> $rateLimiter
                             .updateSpec(rateLimiterSpec -> rateLimiterSpec.setLogLevel("WARNING")))
                     .validateRateLimiterDeployment();
@@ -79,7 +86,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .validateRateLimiterDeployment()
                     .validateRedisDeployment()
                     .validateConfigMap()
-                    .validateService()
+                    .validateServices()
                     .edit($rateLimiter -> $rateLimiter
                             .updateSpec(rateLimiterSpec -> rateLimiterSpec.setLogLevel("WARNING")))
                     .validateRateLimiterDeployment();
@@ -123,14 +130,18 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                 rateLimiterConfigProcessor.validateEnvoyFilter();
                 throw new RuntimeException("RateLimiter doesn't exists, but exist EnvoyFilter");
             } catch (KubernetesClientException ex) {
-                log.info("", ex);
+                if (ex.getStatus().getMessage().equals("envoyfilters.networking.istio.io \"" + rateLimiterConfig.getMetadata().getName() + "\" not found")) {
+                    log.info("", ex);
+                } else {
+                    throw new RuntimeException(ex);
+                }
             }
             rateLimiterProcessor
                     .create(preparedRateLimiter())
                     .validateRateLimiterDeployment()
                     .validateRedisDeployment()
                     .validateConfigMap()
-                    .validateService();
+                    .validateServices();
 
             rateLimiterConfigProcessor
                     .validateRatelimiterConfig()
@@ -155,7 +166,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .validateRateLimiterDeployment()
                     .validateRedisDeployment()
                     .validateConfigMap()
-                    .validateService();
+                    .validateServices();
 
             rateLimiterConfigProcessor
                     .create(rateLimiterConfig)
@@ -171,7 +182,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .validateRateLimiterDeployment()
                     .validateRedisDeployment()
                     .validateConfigMap()
-                    .validateService();
+                    .validateServices();
 
             rateLimiterConfigProcessor
                     .validateConfigMap();
@@ -210,8 +221,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
     }
 
     /**
-     * Тест редактирует RateLimiter конфиг и проверяет,
-     * что изменения откатываются к необходимым.
+     * Тест редактирует RateLimiter конфиг и проверяет, что изменения откатываются к необходимым.
      */
     @Test
     @SneakyThrows
@@ -266,8 +276,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
     }
 
     /**
-     * Удаление файлов, которые создаются автоматически,
-     * и последующая проверка на то, что они верно пересоздались.
+     * Удаление кайндов, которые создаются оператором и проверяем, что они верно пересоздались.
      */
     @Test
     @SneakyThrows
@@ -279,22 +288,23 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
             rateLimiterProcessor
                     .create(preparedRateLimiter())
                     .validateRateLimiter()
-                    .deleteControlledResources();
+                    .deleteConfigMap()
+                    .deleteRateLimitDeployment()
+                    .deleteRedisDeployment()
+                    .deleteRedisService()
+                    .deleteRateLimitService()
+                    .validateConfigMap()
+                    .validateRateLimiterDeployment()
+                    .validateRedisDeployment()
+                    .validateServices();
 
             rateLimiterConfigProcessor
                     .create(preparedRateLimiterConfig())
                     .validateRatelimiterConfig()
-                    .deleteEnvoyFilter();
-
-            rateLimiterConfigProcessor
+                    .deleteEnvoyFilter()
                     .validateConfigMap()
                     .validateEnvoyFilter();
 
-            rateLimiterProcessor
-                    .validateConfigMap()
-                    .validateRateLimiterDeployment()
-                    .validateRedisDeployment()
-                    .validateService();
         }
     }
 
@@ -312,9 +322,23 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
             rateLimiterProcessor.create(preparedRateLimiter());
             rateLimiterConfigProcessor
                     .create(preparedRateLimiterConfig())
-                    .editEnvoyFilter()
-                    .validateEnvoyFilter();
+                    .editEnvoyFilter(envoyFilter -> {
+                        EnvoyConfigObjectPatch envoyFilterConfigPatchesHttpFilter = envoyFilter.getSpec().getConfigPatches().stream()
+                                .filter(i -> i.getApplyTo().name().equals("HTTP_FILTER"))
+                                .findFirst()
+                                .orElseThrow(() -> new IllegalStateException("Dont find HTTP_FILTER block from envoy filter"));
 
+                        EnvoyHttpFilterPatch envoyRateLimit = YAML_MAPPER.convertValue(envoyFilterConfigPatchesHttpFilter.getPatch().getValue(), EnvoyHttpFilterPatch.class);
+                        envoyRateLimit.getConfig().setDomain("another domain");
+                        envoyRateLimit.getConfig().setFailure_mode_deny(false);
+                        envoyRateLimit.getConfig().getRateLimitService().getGrpcService().getEnvoyGrpc().setCluster_name("edited cluster name");
+                        envoyRateLimit.getConfig().getRateLimitService().getGrpcService().setTimeout("5s");
+                        envoyRateLimit.setName("new name");
+                        envoyFilterConfigPatchesHttpFilter.getPatch().setValue(YAML_MAPPER.convertValue(envoyRateLimit, Map.class));
+                        envoyFilter.getSpec().setConfigPatches(Collections.singletonList(envoyFilterConfigPatchesHttpFilter));
+                        return envoyFilter;
+                    })
+                    .validateEnvoyFilter();
         }
     }
 
@@ -324,36 +348,39 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
      */
     @Test
     @SneakyThrows
-    public void editRateLimiterService(){
+    public void editService() {
         RateLimiter rateLimiter = preparedRateLimiter();
         try (
                 RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
         ) {
             rateLimiterProcessor
-                    .create(rateLimiter);
-
-            rateLimiterProcessor.editRateLimiterService().validateService();
+                    .create(rateLimiter)
+                    .editRateLimiterService(service -> {
+                        ServiceSpec spec = service.getSpec();
+                        ServicePort servicePort = new ServicePort();
+                        servicePort.setName("http");
+                        servicePort.setPort(30000);
+                        servicePort.setProtocol("UDP");
+                        servicePort.setTargetPort(new IntOrString(50000));
+                        spec.setPorts(Collections.singletonList(servicePort));
+                        return service;
+                    })
+                    .validateServices()
+                    .delete()
+                    .create(rateLimiter)
+                    .editRedisService(service -> {
+                        ServiceSpec spec = service.getSpec();
+                        spec.setSelector(null);
+                        return service;
+                    })
+                    .editRateLimiterService(service -> {
+                        ServiceSpec spec = service.getSpec();
+                        spec.setSelector(null);
+                        return service;
+                    })
+                    .validateServices();
         }
     }
-
-    /**
-     * Тест редактирует Redis Service и проверяет, что
-     * изменения откатываются к необходимым.
-     */
-    @Test
-    @SneakyThrows
-    public void editRedisService(){
-        RateLimiter rateLimiter = preparedRateLimiter();
-        try (
-                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
-        ) {
-            rateLimiterProcessor
-                    .create(rateLimiter);
-
-            rateLimiterProcessor.editRedisService().validateService();
-        }
-    }
-
 
     private RateLimiter preparedRateLimiter() {
         return new RateLimiter(client)

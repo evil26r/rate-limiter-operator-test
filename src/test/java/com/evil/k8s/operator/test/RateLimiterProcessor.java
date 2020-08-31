@@ -10,8 +10,8 @@ import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
+import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static com.evil.k8s.operator.test.utils.Utils.*;
@@ -154,26 +154,16 @@ public class RateLimiterProcessor implements AutoCloseable {
         return this;
     }
 
-    public RateLimiterProcessor validateService() {
-        return validateService(currentRateLimiter);
+    public RateLimiterProcessor validateServices() {
+        return validateServices(currentRateLimiter);
     }
 
-    public RateLimiterProcessor validateService(RateLimiter rateLimiter) {
+    public RateLimiterProcessor validateServices(RateLimiter rateLimiter) {
         String name = rateLimiter.getMetadata().getName();
         int port = rateLimiter.getSpec().getPort();
-        List<Service> serviceList = requester.getServices().stream()
-                .filter(service -> service.getMetadata().getName().equals(name)
-                        || service.getMetadata().getName().equals(generateRedisName(name)))
-                .collect(Collectors.toList());
 
-        assertEquals(2, serviceList.size());
-
-        Service rateLimiterService = serviceList.stream()
-                .filter(service -> service.getMetadata().getName().equals(name))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Not exist ratelimiter service"));
-
-        ServiceSpec rateLimiterServiceSpec = rateLimiterService.getSpec();
+        Service service = requester.getServiceByName(name);
+        ServiceSpec rateLimiterServiceSpec = service.getSpec();
 
         //Check port block
         rateLimiterServiceSpec.getPorts()
@@ -184,16 +174,12 @@ public class RateLimiterProcessor implements AutoCloseable {
                     assertEquals(port, servicePort.getTargetPort().getIntVal());
                 });
         //Check selector block
-        rateLimiterService.getSpec().getSelector().entrySet().stream()
+        rateLimiterServiceSpec.getSelector().entrySet().stream()
                 .filter(stringStringEntry -> stringStringEntry.getKey().equals("app") && stringStringEntry.getValue().equals(name))
                 .findAny().orElseThrow(() -> new IllegalStateException("Not exist lable from ratelimiter service selector"));
 
-        Service redisRateLimiterService = serviceList.stream()
-                .filter(service -> service.getMetadata().getName().equals(generateRedisName(name)))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Not exist ratelimiter service"));
-
-        ServiceSpec redisRateLimiterServiceSpec = redisRateLimiterService.getSpec();
+        Service redisService = requester.getServiceByName(generateRedisName(name));
+        ServiceSpec redisRateLimiterServiceSpec = redisService.getSpec();
 
         //Check port block
         redisRateLimiterServiceSpec.getPorts().forEach(servicePort -> {
@@ -210,15 +196,34 @@ public class RateLimiterProcessor implements AutoCloseable {
         return this;
     }
 
-    @SneakyThrows
-    public RateLimiterProcessor deleteControlledResources() {
+    public RateLimiterProcessor deleteConfigMap() {
         String name = currentRateLimiter.getMetadata().getName();
         requester.deleteConfigMap(name);
-        requester.deleteDeployment(name);
+        return this;
+    }
+
+    public RateLimiterProcessor deleteRedisDeployment() {
+        String name = currentRateLimiter.getMetadata().getName();
         requester.deleteDeployment(generateRedisName(name));
+        return this;
+    }
+
+    public RateLimiterProcessor deleteRateLimitDeployment() {
+        String name = currentRateLimiter.getMetadata().getName();
+        requester.deleteDeployment(name);
+        return this;
+    }
+
+    public RateLimiterProcessor deleteRateLimitService() {
+        String name = currentRateLimiter.getMetadata().getName();
         requester.deleteService(name);
+        return this;
+    }
+
+    @SneakyThrows
+    public RateLimiterProcessor deleteRedisService() {
+        String name = currentRateLimiter.getMetadata().getName();
         requester.deleteService(generateRedisName(name));
-        TimeUnit.MILLISECONDS.sleep(1_000);
         return this;
     }
 
@@ -242,46 +247,20 @@ public class RateLimiterProcessor implements AutoCloseable {
         return this;
     }
 
-    public RateLimiterProcessor editRateLimiterService() {
-        String name = currentRateLimiter.getMetadata().getName();
-
-        List<Service> serviceList = requester.getServices().stream()
-                .filter(service -> service.getMetadata().getName().equals(name))
-                .collect(Collectors.toList());
-
-        Service rateLimiterService = serviceList.stream()
-                .filter(service -> service.getMetadata().getName().equals(name))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Not exist ratelimiter service"));
-
-        ServiceSpec rateLimiterServiceSpec = rateLimiterService.getSpec();
-
-        rateLimiterServiceSpec.getPorts().get(0).setName("another name");
-        rateLimiterServiceSpec.getPorts().get(0).setAppProtocol("smth");
-        rateLimiterService.setSpec(rateLimiterServiceSpec);
-        requester.editService(rateLimiterService);
+    public RateLimiterProcessor editRateLimiterService(UnaryOperator<Service> unaryOperator) {
+        editService(unaryOperator, currentRateLimiter.getMetadata().getName());
         return this;
     }
 
-    public RateLimiterProcessor editRedisService() {
-        String name = currentRateLimiter.getMetadata().getName();
-
-        List<Service> serviceList = requester.getServices().stream()
-                .filter(service -> service.getMetadata().getName().equals(generateRedisName(name)))
-                .collect(Collectors.toList());
-
-        Service redisService = serviceList.stream()
-                .filter(service -> service.getMetadata().getName().equals(generateRedisName(name)))
-                .findFirst()
-                .orElseThrow(() -> new IllegalStateException("Not exist redis service"));
-
-        ServiceSpec redisServiceSpec = redisService.getSpec();
-
-        redisServiceSpec.getPorts().get(0).setName("another name");
-        redisServiceSpec.getPorts().get(0).setAppProtocol("smth");
-        redisService.setSpec(redisServiceSpec);
-        requester.editService(redisService);
+    public RateLimiterProcessor editRedisService(UnaryOperator<Service> unaryOperator) {
+        editService(unaryOperator, generateRedisName(currentRateLimiter.getMetadata().getName()));
         return this;
     }
 
+    private RateLimiterProcessor editService(UnaryOperator<Service> unaryOperator, String name) {
+        Service service = requester.getServiceByName(name);
+        Service updatedService = unaryOperator.apply(service);
+        requester.editService(updatedService);
+        return this;
+    }
 }
