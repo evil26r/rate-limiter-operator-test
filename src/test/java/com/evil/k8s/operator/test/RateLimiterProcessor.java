@@ -241,4 +241,47 @@ public class RateLimiterProcessor implements AutoCloseable {
         requester.deleteRateLimiter(name);
         return this;
     }
+
+    public RateLimiterProcessor editRateLimiterService() {
+        String name = currentRateLimiter.getMetadata().getName();
+
+        List<Service> serviceList = requester.getServices().stream()
+                .filter(service -> service.getMetadata().getName().equals(name))
+                .collect(Collectors.toList());
+
+        Service rateLimiterService = serviceList.stream()
+                .filter(service -> service.getMetadata().getName().equals(name))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Not exist ratelimiter service"));
+
+        ServiceSpec rateLimiterServiceSpec = rateLimiterService.getSpec();
+
+        rateLimiterServiceSpec.getPorts().get(0).setName("another name");
+        rateLimiterServiceSpec.getPorts().get(0).setAppProtocol("smth");
+        rateLimiterService.setSpec(rateLimiterServiceSpec);
+        requester.editService(rateLimiterService);
+        return this;
+    }
+
+    public RateLimiterProcessor editRedisService() {
+        String name = currentRateLimiter.getMetadata().getName();
+
+        List<Service> serviceList = requester.getServices().stream()
+                .filter(service -> service.getMetadata().getName().equals(generateRedisName(name)))
+                .collect(Collectors.toList());
+
+        Service redisService = serviceList.stream()
+                .filter(service -> service.getMetadata().getName().equals(generateRedisName(name)))
+                .findFirst()
+                .orElseThrow(() -> new IllegalStateException("Not exist redis service"));
+
+        ServiceSpec redisServiceSpec = redisService.getSpec();
+
+        redisServiceSpec.getPorts().get(0).setName("another name");
+        redisServiceSpec.getPorts().get(0).setAppProtocol("smth");
+        redisService.setSpec(redisServiceSpec);
+        requester.editService(redisService);
+        return this;
+    }
+
 }

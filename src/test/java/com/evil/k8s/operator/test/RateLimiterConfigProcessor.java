@@ -5,15 +5,13 @@ import com.evil.k8s.operator.test.models.EnvoyGatewayPatch;
 import com.evil.k8s.operator.test.models.EnvoyHttpFilterPatch;
 import com.evil.k8s.operator.test.models.RateLimiterConfig;
 import com.fasterxml.jackson.core.JsonProcessingException;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.snowdrop.istio.api.networking.v1alpha3.*;
 
-import java.util.HashSet;
-import java.util.LinkedList;
-import java.util.List;
-import java.util.Map;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.function.Consumer;
 import java.util.stream.Collectors;
@@ -208,6 +206,11 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         envoyRateLimit.getConfig().getRateLimitService().getGrpcService().getEnvoyGrpc().setCluster_name("edited cluster name");
         envoyRateLimit.getConfig().getRateLimitService().getGrpcService().setTimeout("5s");
         envoyRateLimit.setName("new name");
+
+        ObjectMapper oMapper = new ObjectMapper();
+        envoyFilterConfigPatchesHttpFilter.getPatch().setValue(oMapper.convertValue(envoyFilter, Map.class));
+        envoyFilter.getSpec().setConfigPatches(Collections.singletonList(envoyFilterConfigPatchesHttpFilter));
+        requester.editEnvoyFilter(envoyFilter);
         return this;
     }
 

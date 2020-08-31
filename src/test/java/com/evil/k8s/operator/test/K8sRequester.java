@@ -11,6 +11,7 @@ import io.fabric8.kubernetes.client.dsl.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
+import me.snowdrop.istio.api.networking.v1alpha3.EnvoyFilter;
 
 import java.util.List;
 import java.util.Map;
@@ -158,6 +159,19 @@ public class K8sRequester {
         client.customResource(rateLimitConfigCrdContext)
                 .edit(currentRateLimiterConfig.getMetadata().getNamespace(), currentRateLimiterConfig.getMetadata().getName(),
                         YAML_MAPPER.writeValueAsString(currentRateLimiterConfig));
+        TimeUnit.MILLISECONDS.sleep(2_000);
+    }
+
+    @SneakyThrows
+    public void editService(Service service) {
+        client.services().createOrReplace(service);
+        TimeUnit.MILLISECONDS.sleep(2_000);
+    }
+
+    @SneakyThrows
+    public void editEnvoyFilter(EnvoyFilter envoyFilter) {
+        client.customResource(envoyFilterContext).edit(envoyFilter.getMetadata().getNamespace(),
+                envoyFilter.getMetadata().getName(), YAML_MAPPER.writeValueAsString(envoyFilter));
         TimeUnit.MILLISECONDS.sleep(2_000);
     }
 }

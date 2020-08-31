@@ -209,6 +209,10 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
         }
     }
 
+    /**
+     * Тест редактирует RateLimiter конфиг и проверяет,
+     * что изменения откатываются к необходимым.
+     */
     @Test
     @SneakyThrows
     public void editAllFieldsRateLimiterConfig() {
@@ -261,6 +265,10 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
         }
     }
 
+    /**
+     * Удаление файлов, которые создаются автоматически,
+     * и последующая проверка на то, что они верно пересоздались.
+     */
     @Test
     @SneakyThrows
     public void deleteResources() {
@@ -291,6 +299,9 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
     }
 
 
+    /**
+     * Редактирование EnvoyFilter и проверка, что изменения откатываются к необходимым.
+     */
     @Test
     @SneakyThrows
     public void editEnvoyFilter() {
@@ -304,6 +315,42 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .editEnvoyFilter()
                     .validateEnvoyFilter();
 
+        }
+    }
+
+    /**
+     * Тест редактирует RateLimiter Service и проверяет, что
+     * изменения откатываются к необходимым.
+     */
+    @Test
+    @SneakyThrows
+    public void editRateLimiterService(){
+        RateLimiter rateLimiter = preparedRateLimiter();
+        try (
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
+        ) {
+            rateLimiterProcessor
+                    .create(rateLimiter);
+
+            rateLimiterProcessor.editRateLimiterService().validateService();
+        }
+    }
+
+    /**
+     * Тест редактирует Redis Service и проверяет, что
+     * изменения откатываются к необходимым.
+     */
+    @Test
+    @SneakyThrows
+    public void editRedisService(){
+        RateLimiter rateLimiter = preparedRateLimiter();
+        try (
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
+        ) {
+            rateLimiterProcessor
+                    .create(rateLimiter);
+
+            rateLimiterProcessor.editRedisService().validateService();
         }
     }
 
