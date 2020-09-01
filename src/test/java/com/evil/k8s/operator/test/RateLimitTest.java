@@ -388,7 +388,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
      * происходит откат изменений.
      */
     @Test
-    public void editDeployment(){
+    public void editDeployment() {
         RateLimiter rateLimiter = preparedRateLimiter();
         try (
                 RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
@@ -398,17 +398,17 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .create(rateLimiter)
                     .validateRateLimiterDeployment()
                     .validateRedisDeployment()
-                    .editDeployment(rateLimiter.getMetadata().getName(), d->{
-                d.getSpec().setReplicas(5);
-                d.getMetadata().setName("new name deploy");
-                d.getSpec().getSelector().getMatchLabels().put("newkey", "newvalue");
-            })
+                    .editDeployment(rateLimiter.getMetadata().getName(), d -> {
+                        d.getSpec().setReplicas(5);
+                        d.getMetadata().setName("new name deploy");
+                        d.getSpec().getSelector().getMatchLabels().put("newkey", "newvalue");
+                    })
                     .validateRateLimiterDeployment()
-                    .editDeployment(generateRedisName(rateLimiter.getMetadata().getName()), d->{
-                d.getSpec().setReplicas(4);
-                d.getMetadata().setName("new REDIS name deploy");
-                d.getSpec().getSelector().getMatchLabels().put("newrediskey", "newredisvalue");
-            })
+                    .editDeployment(generateRedisName(rateLimiter.getMetadata().getName()), d -> {
+                        d.getSpec().setReplicas(4);
+                        d.getMetadata().setName("new REDIS name deploy");
+                        d.getSpec().getSelector().getMatchLabels().put("newrediskey", "newredisvalue");
+                    })
                     .validateRedisDeployment();
         }
     }
@@ -419,7 +419,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
      */
     @Test
     @SneakyThrows
-    public void editConfigMap(){
+    public void editConfigMap() {
         RateLimiter rateLimiter = preparedRateLimiter();
         RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
         try (
@@ -429,9 +429,9 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
             rateLimiterProcessor.create(rateLimiter);
             rateLimiterConfigProcessor
                     .create(rateLimiterConfig)
-                    .editConfigMap(rateLimiterConfig.getSpec().getRateLimiter(), cm->{
+                    .editConfigMap(rateLimiterConfig.getSpec().getRateLimiter(), cm -> {
 //                        ????
-                     })
+                    })
                     .validateConfigMap();
 
 

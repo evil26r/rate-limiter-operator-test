@@ -18,7 +18,6 @@ import java.util.LinkedList;
 import java.util.List;
 import java.util.Map;
 import java.util.function.Consumer;
-import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static com.evil.k8s.operator.test.utils.Utils.YAML_MAPPER;
@@ -141,10 +140,16 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         RouteConfigurationObjectTypes routeConfigurationObjectTypes =
                 (RouteConfigurationObjectTypes) envoyFilterConfigPatchesVirtualHost.getMatch().getObjectTypes();
         switch (currentRateLimiterConfig.getSpec().getApplyTo()) {
-            case GATEWAY, ANY, SIDECAR_OUTBOUND -> assertEquals(currentRateLimiterConfig.getSpec().getHost() + ":" + currentRateLimiterConfig.getSpec()
-                    .getPort(), routeConfigurationObjectTypes.getRouteConfiguration().getVhost().getName());
-            case SIDECAR_INBOUND -> assertEquals("inbound|http|" + currentRateLimiterConfig.getSpec()
-                    .getPort(), routeConfigurationObjectTypes.getRouteConfiguration().getVhost().getName());
+            case GATEWAY:
+            case ANY:
+            case SIDECAR_OUTBOUND:
+                assertEquals(currentRateLimiterConfig.getSpec().getHost() + ":" + currentRateLimiterConfig.getSpec()
+                        .getPort(), routeConfigurationObjectTypes.getRouteConfiguration().getVhost().getName());
+                break;
+            case SIDECAR_INBOUND:
+                assertEquals("inbound|http|" + currentRateLimiterConfig.getSpec()
+                        .getPort(), routeConfigurationObjectTypes.getRouteConfiguration().getVhost().getName());
+                break;
         }
 
         // check operation: MERGE
@@ -211,7 +216,6 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         ConfigMap configMap = configMaps.get();
         configMapConsumer.accept(configMap);
         requester.editConfigMap(configMap);
-
         return this;
     }
 }
