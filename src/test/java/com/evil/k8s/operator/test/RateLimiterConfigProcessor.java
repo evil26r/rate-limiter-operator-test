@@ -211,11 +211,22 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         return this;
     }
 
-    public RateLimiterConfigProcessor editConfigMap(Consumer<ConfigMap> configMapConsumer) {
-        String name = currentRateLimiterConfig.getMetadata().getName();
-        Resource<ConfigMap, DoneableConfigMap> configMaps = requester.getConfigMap(name);
-        ConfigMap configMap = configMaps.get();
-        configMapConsumer.accept(configMap);
+    @SneakyThrows
+    public RateLimiterConfigProcessor editConfigMap(Consumer<RateLimiterConfig.RateLimitProperty> rateLimitPropertyConsumer) {
+
+        ConfigMap configMap = requester.getConfigMap(currentRateLimiterConfig.getSpec().getRateLimiter()).get();
+        Map<String, String> configData = configMap.getData();
+        String yamlFileName = currentRateLimiterConfig.getMetadata().getName() + ".yaml";
+        String configMapDescriptors = configData.get(yamlFileName);
+
+        RateLimiterConfig.RateLimitProperty configMapRateLimitProperty =
+                YAML_MAPPER.readValue(configMapDescriptors, RateLimiterConfig.RateLimitProperty.class);
+
+        rateLimitPropertyConsumer.accept(configMapRateLimitProperty);
+
+        configData.replace(yamlFileName, YAML_MAPPER.writeValueAsString(configMapRateLimitProperty));
+
+        configMap.setData(configData);
         requester.editConfigMap(configMap);
         return this;
     }
