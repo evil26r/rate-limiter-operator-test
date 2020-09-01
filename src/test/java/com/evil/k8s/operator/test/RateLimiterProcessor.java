@@ -91,6 +91,7 @@ public class RateLimiterProcessor implements AutoCloseable {
     }
 
     public RateLimiterProcessor validateRedisDeployment(RateLimiter rateLimiter) {
+        log.info("Check Redis deployment");
         String redisName = generateRedisName(rateLimiter.getMetadata().getName());
         Deployment redisDeployment = requester.getDeployment(redisName);
 
