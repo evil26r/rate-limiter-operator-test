@@ -391,10 +391,26 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .validateRedisDeployment()
                     .editRedisDeployment(deployment -> {
                         deployment.getSpec().setReplicas(5);
+                        deployment.getSpec().getSelector().getMatchLabels().put("app8","label9");
+                        deployment.getSpec().getTemplate().getMetadata().getLabels().put("app7","label32");
+                        deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getPorts().get(0)
+                                .setContainerPort(1234);
+                        deployment.getSpec().getTemplate().getSpec().setRestartPolicy("Never");
+                        deployment.getSpec().getStrategy().setType("Recreate");
                     })
                     .validateRateLimiterDeployment()
                     .editRateLimiterDeployment(deployment -> {
                         deployment.getSpec().setReplicas(4);
+                        deployment.getSpec().getSelector().getMatchLabels().put("app2","label2");
+                        deployment.getSpec().getTemplate().getMetadata().getLabels().put("app3","label3");
+                        deployment.getSpec().getTemplate().getSpec().getVolumes().get(0).setName("newName");
+                        deployment.getSpec().getTemplate().getSpec().getVolumes().get(0)
+                                .getConfigMap().setName("newConfigMapName");
+                        deployment.getSpec().getTemplate().getSpec().getContainers().get(0)
+                                .setImagePullPolicy("IfNotPresent");
+                        deployment.getSpec().getStrategy().setType("Recreate");
+                        deployment.getSpec().setProgressDeadlineSeconds(60);
+
                     })
                     .validateRedisDeployment();
         }
