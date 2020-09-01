@@ -11,7 +11,6 @@ import lombok.extern.slf4j.Slf4j;
 
 import java.util.*;
 import java.util.function.Consumer;
-import java.util.function.UnaryOperator;
 import java.util.stream.Collectors;
 
 import static com.evil.k8s.operator.test.utils.Utils.*;
@@ -247,20 +246,20 @@ public class RateLimiterProcessor implements AutoCloseable {
         return this;
     }
 
-    public RateLimiterProcessor editRateLimiterService(UnaryOperator<Service> unaryOperator) {
-        editService(unaryOperator, currentRateLimiter.getMetadata().getName());
+    public RateLimiterProcessor editRateLimiterService(Consumer<Service> сonsumer) {
+        editService(сonsumer, currentRateLimiter.getMetadata().getName());
         return this;
     }
 
-    public RateLimiterProcessor editRedisService(UnaryOperator<Service> unaryOperator) {
-        editService(unaryOperator, generateRedisName(currentRateLimiter.getMetadata().getName()));
+    public RateLimiterProcessor editRedisService(Consumer<Service> сonsumer) {
+        editService(сonsumer, generateRedisName(currentRateLimiter.getMetadata().getName()));
         return this;
     }
 
-    private RateLimiterProcessor editService(UnaryOperator<Service> unaryOperator, String name) {
+    private RateLimiterProcessor editService(Consumer<Service> сonsumer, String name) {
         Service service = requester.getServiceByName(name);
-        Service updatedService = unaryOperator.apply(service);
-        requester.editService(updatedService);
+        сonsumer.accept(service);
+        requester.editService(service);
         return this;
     }
 

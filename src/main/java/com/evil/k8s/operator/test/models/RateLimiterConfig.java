@@ -11,7 +11,6 @@ import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
 import lombok.experimental.Accessors;
-import me.snowdrop.istio.api.networking.v1alpha3.WorkloadSelector;
 
 import java.util.List;
 import java.util.Objects;
@@ -56,7 +55,8 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
         private String rateLimiter;
         private boolean failureModeDeny;
         private RateLimitProperty rateLimitProperty;
-        @JsonInclude(JsonInclude.Include.NON_ABSENT)
+        private String rateLimitRequestTimeout;
+        @JsonInclude(JsonInclude.Include.NON_NULL)
         private WorkloadSelector workloadSelector;
     }
 

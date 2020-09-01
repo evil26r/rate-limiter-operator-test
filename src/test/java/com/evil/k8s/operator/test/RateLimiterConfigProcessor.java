@@ -6,8 +6,6 @@ import com.evil.k8s.operator.test.models.EnvoyHttpFilterPatch;
 import com.evil.k8s.operator.test.models.RateLimiterConfig;
 import com.fasterxml.jackson.core.JsonProcessingException;
 import io.fabric8.kubernetes.api.model.ConfigMap;
-import io.fabric8.kubernetes.api.model.DoneableConfigMap;
-import io.fabric8.kubernetes.client.dsl.Resource;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
@@ -108,7 +106,8 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         assertEquals(currentRateLimiterConfig.getSpec().getRateLimitProperty().getDomain(), envoyRateLimit.getConfig().getDomain());
         assertEquals("patched." + rateLimiterName + "." + namespace + ".svc.cluster.local",
                 envoyRateLimit.getConfig().getRateLimitService().getGrpcService().getEnvoyGrpc().getCluster_name());
-        assertEquals("0.25s", envoyRateLimit.getConfig().getRateLimitService().getGrpcService().getTimeout());
+        assertEquals(currentRateLimiterConfig.getSpec().getRateLimitRequestTimeout(),
+                envoyRateLimit.getConfig().getRateLimitService().getGrpcService().getTimeout());
 
 
         //applyTo: CLUSTER
@@ -163,7 +162,7 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
                 envoyClusterPatch.getRateLimits().get(0).getActions().get(0).getRequestHeaders().getHeaderName());
 
         //ToDo: Расскомментировать
-        assertEquals(currentRateLimiterConfig.getSpec().getWorkloadSelector(), envoyFilter.getSpec().getWorkloadSelector());
+        assertEquals(currentRateLimiterConfig.getSpec().getWorkloadSelector().getLabels(), envoyFilter.getSpec().getWorkloadSelector().getLabels());
 
         return this;
     }

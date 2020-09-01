@@ -3,6 +3,7 @@ package com.evil.k8s.operator.test;
 import com.evil.k8s.operator.test.models.EnvoyHttpFilterPatch;
 import com.evil.k8s.operator.test.models.RateLimiter;
 import com.evil.k8s.operator.test.models.RateLimiterConfig;
+import com.evil.k8s.operator.test.models.WorkloadSelector;
 import io.fabric8.kubernetes.api.model.IntOrString;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.ServicePort;
@@ -11,7 +12,6 @@ import io.fabric8.kubernetes.client.KubernetesClientException;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.snowdrop.istio.api.networking.v1alpha3.EnvoyConfigObjectPatch;
-import me.snowdrop.istio.api.networking.v1alpha3.WorkloadSelector;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -19,10 +19,8 @@ import java.util.Map;
 
 import static com.evil.k8s.operator.test.models.RateLimiterConfig.Context.*;
 import static com.evil.k8s.operator.test.utils.Utils.YAML_MAPPER;
-import static com.evil.k8s.operator.test.utils.Utils.generateRedisName;
 
 
-//@SpringBootTest
 @Slf4j
 class RateLimitTest extends K8sRateLimitAbstractTest {
 
@@ -50,7 +48,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .validateConfigMap()
                     .validateServices()
                     .edit($rateLimiter -> $rateLimiter
-                            .updateSpec(rateLimiterSpec -> rateLimiterSpec.setLogLevel("WARNING")))
+                            .updateSpec(rateLimiterSpec -> rateLimiterSpec.setLogLevel("WARN")))
                     .validateRateLimiterDeployment();
 
             rateLimiterConfigProcessor
@@ -61,9 +59,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .edit(rlConfig -> rlConfig
                             .updateSpec(rateLimiterConfigSpec -> {
                                 rateLimiterConfigSpec.setApplyTo(SIDECAR_INBOUND);
-                                WorkloadSelector workloadSelector = new WorkloadSelector();
-                                workloadSelector.setLabels(Collections.singletonMap("app", "huapp"));
-                                rateLimiterConfigSpec.setWorkloadSelector(workloadSelector);
+                                rateLimiterConfigSpec.getWorkloadSelector().setLabels(Collections.singletonMap("app", "huapp"));
                             }))
                     .validateEnvoyFilter()
                     .validateConfigMap();
@@ -77,7 +73,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
     public void createRateLimiterWithOutWorkLoadSelector() {
         RateLimiter rateLimiter = preparedRateLimiter();
         RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
-        rateLimiterConfig.setSpec(rateLimiterConfig.getSpec().setWorkloadSelector(null));
+        rateLimiterConfig.getSpec().getWorkloadSelector().setLabels(Collections.emptyMap());
         try (
                 RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
                 RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
@@ -89,7 +85,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .validateConfigMap()
                     .validateServices()
                     .edit($rateLimiter -> $rateLimiter
-                            .updateSpec(rateLimiterSpec -> rateLimiterSpec.setLogLevel("WARNING")))
+                            .updateSpec(rateLimiterSpec -> rateLimiterSpec.setLogLevel("WARN")))
                     .validateRateLimiterDeployment();
 
             rateLimiterConfigProcessor
@@ -99,15 +95,13 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .validateEnvoyFilter()
                     .edit(rlConfig -> rlConfig
                             .updateSpec(rateLimiterConfigSpec -> {
-                                WorkloadSelector workloadSelector = new WorkloadSelector();
-                                workloadSelector.setLabels(Collections.singletonMap("app", "huapp"));
-                                rateLimiterConfigSpec.setWorkloadSelector(workloadSelector);
+                                rateLimiterConfigSpec.getWorkloadSelector().setLabels(Collections.singletonMap("app", "huapp"));
                             }))
                     .validateEnvoyFilter()
                     .validateConfigMap()
                     .edit(rlConfig -> rlConfig
                             .updateSpec(rateLimiterConfigSpec -> {
-                                rateLimiterConfigSpec.setWorkloadSelector(null);
+                                rateLimiterConfigSpec.getWorkloadSelector().setLabels(Collections.emptyMap());
                             }))
                     .validateEnvoyFilter();
         }
@@ -363,7 +357,6 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                         servicePort.setProtocol("UDP");
                         servicePort.setTargetPort(new IntOrString(50000));
                         spec.setPorts(Collections.singletonList(servicePort));
-                        return service;
                     })
                     .validateServices()
                     .delete()
@@ -371,12 +364,10 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .editRedisService(service -> {
                         ServiceSpec spec = service.getSpec();
                         spec.setSelector(null);
-                        return service;
                     })
                     .editRateLimiterService(service -> {
                         ServiceSpec spec = service.getSpec();
                         spec.setSelector(null);
-                        return service;
                     })
                     .validateServices();
         }
@@ -469,6 +460,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                         .setPort(80)
                         .setRateLimiter("rate-limiter-test")
                         .setRateLimitProperty(rateLimitProperty)
+                        .setRateLimitRequestTimeout("1s")
                         .setWorkloadSelector(new WorkloadSelector(Collections.singletonMap("app", "application-app")));
 
         return RateLimiterConfig.builder()
