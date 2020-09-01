@@ -398,16 +398,12 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .create(rateLimiter)
                     .validateRateLimiterDeployment()
                     .validateRedisDeployment()
-                    .editDeployment(rateLimiter.getMetadata().getName(), d -> {
-                        d.getSpec().setReplicas(5);
-                        d.getMetadata().setName("new name deploy");
-                        d.getSpec().getSelector().getMatchLabels().put("newkey", "newvalue");
+                    .editRedisDeployment(deployment -> {
+                        deployment.getSpec().setReplicas(5);
                     })
                     .validateRateLimiterDeployment()
-                    .editDeployment(generateRedisName(rateLimiter.getMetadata().getName()), d -> {
-                        d.getSpec().setReplicas(4);
-                        d.getMetadata().setName("new REDIS name deploy");
-                        d.getSpec().getSelector().getMatchLabels().put("newrediskey", "newredisvalue");
+                    .editRateLimiterDeployment(deployment -> {
+                        deployment.getSpec().setReplicas(4);
                     })
                     .validateRedisDeployment();
         }

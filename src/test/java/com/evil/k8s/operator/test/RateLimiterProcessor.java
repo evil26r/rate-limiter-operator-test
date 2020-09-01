@@ -264,8 +264,15 @@ public class RateLimiterProcessor implements AutoCloseable {
         return this;
     }
 
-    public RateLimiterProcessor editDeployment(String name, Consumer<Deployment> deploymentConsumer) {
-        Deployment deployment = requester.getDeployment(name);
+    public RateLimiterProcessor editRedisDeployment(Consumer<Deployment> deploymentConsumer) {
+        Deployment deployment = requester.getDeployment(generateRedisName(currentRateLimiter.getMetadata().getName()));
+        deploymentConsumer.accept(deployment);
+        requester.editDeployment(deployment);
+        return this;
+    }
+
+    public RateLimiterProcessor editRateLimiterDeployment(Consumer<Deployment> deploymentConsumer) {
+        Deployment deployment = requester.getDeployment(currentRateLimiter.getMetadata().getName());
         deploymentConsumer.accept(deployment);
         requester.editDeployment(deployment);
         return this;
