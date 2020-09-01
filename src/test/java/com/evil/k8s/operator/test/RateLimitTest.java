@@ -393,7 +393,6 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
         try (
                 RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
         ) {
-
             rateLimiterProcessor
                     .create(rateLimiter)
                     .validateRateLimiterDeployment()
@@ -425,12 +424,13 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
             rateLimiterProcessor.create(rateLimiter);
             rateLimiterConfigProcessor
                     .create(rateLimiterConfig)
-                    .editConfigMap(rateLimiterConfig.getSpec().getRateLimiter(), cm -> {
-//                        ????
+                    .editConfigMap(rateLimitProperty -> {
+                        rateLimitProperty.setDomain("new_Domain");
+                        rateLimitProperty.getDescriptors().get(0).setValue("new_value2");
+                        rateLimitProperty.getDescriptors().get(0).setKey("new_Key456");
+                        rateLimitProperty.getDescriptors().get(0).getRateLimit().setRequestsPerUnit(10);
                     })
                     .validateConfigMap();
-
-
         }
     }
 
