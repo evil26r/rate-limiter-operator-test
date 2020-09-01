@@ -19,7 +19,6 @@ import java.util.Map;
 
 import static com.evil.k8s.operator.test.models.RateLimiterConfig.Context.*;
 import static com.evil.k8s.operator.test.utils.Utils.YAML_MAPPER;
-import static com.evil.k8s.operator.test.utils.Utils.generateRedisName;
 
 
 //@SpringBootTest
@@ -425,7 +424,7 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
             rateLimiterProcessor.create(rateLimiter);
             rateLimiterConfigProcessor
                     .create(rateLimiterConfig)
-                    .editConfigMap(rateLimiterConfig.getSpec().getRateLimiter(), cm -> {
+                    .editConfigMap(cm -> {
 //                        ????
                     })
                     .validateConfigMap();

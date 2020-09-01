@@ -211,7 +211,8 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         return this;
     }
 
-    public RateLimiterConfigProcessor editConfigMap(String name, Consumer<ConfigMap> configMapConsumer) {
+    public RateLimiterConfigProcessor editConfigMap(Consumer<ConfigMap> configMapConsumer) {
+        String name = currentRateLimiterConfig.getMetadata().getName();
         Resource<ConfigMap, DoneableConfigMap> configMaps = requester.getConfigMap(name);
         ConfigMap configMap = configMaps.get();
         configMapConsumer.accept(configMap);
