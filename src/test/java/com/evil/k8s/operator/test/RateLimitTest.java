@@ -1,5 +1,6 @@
 package com.evil.k8s.operator.test;
 
+import com.evil.k8s.operator.test.models.EnvoyGatewayPatch;
 import com.evil.k8s.operator.test.models.EnvoyHttpFilterPatch;
 import com.evil.k8s.operator.test.models.RateLimiter;
 import com.evil.k8s.operator.test.models.RateLimiterConfig;
@@ -15,11 +16,11 @@ import me.snowdrop.istio.api.networking.v1alpha3.EnvoyConfigObjectPatch;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
+import java.util.List;
 import java.util.Map;
 
 import static com.evil.k8s.operator.test.models.RateLimiterConfig.Context.*;
 import static com.evil.k8s.operator.test.utils.Utils.YAML_MAPPER;
-
 
 @Slf4j
 class RateLimitTest extends K8sRateLimitAbstractTest {
@@ -195,16 +196,15 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
 
         RateLimiterConfig rateLimiterConfig2 = preparedRateLimiterConfig();
         rateLimiterConfig2.getMetadata().setName("new-rate-limiter-test");
-        rateLimiterConfig2.getSpec().getRateLimitProperty().setDomain("another-domain");
 
         RateLimiterConfig rateLimiterConfig3 = preparedRateLimiterConfig();
         rateLimiterConfig3.getMetadata().setName("another-new-rate-limiter-test");
-        rateLimiterConfig3.getSpec().getRateLimitProperty().setDomain("another-domain");
         try (
                 RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
                 RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
         ) {
             rateLimiterProcessor.create(preparedRateLimiter());
+
 
             rateLimiterConfigProcessor
                     .create(rateLimiterConfig1)
@@ -240,10 +240,9 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                                 workloadSelector.setLabels(Collections.singletonMap("app", "huapp"));
                                 rateLimiterConfigSpec.setWorkloadSelector(workloadSelector);
 
-                                rateLimiterConfigSpec.getRateLimitProperty().setDomain("another-domain");
-                                rateLimiterConfigSpec.getRateLimitProperty().getDescriptors()
+                                rateLimiterConfigSpec.getDescriptors()
                                         .forEach(d -> d.setKey("new-header-key").setValue("new-header-val"));
-                                rateLimiterConfigSpec.getRateLimitProperty().getDescriptors()
+                                rateLimiterConfigSpec.getDescriptors()
                                         .forEach(d -> d.getRateLimit().setRequestsPerUnit(5));
                             }))
                     .validateRatelimiterConfig()
@@ -258,10 +257,9 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                                 workloadSelector.setLabels(Collections.singletonMap("app", "huapp2"));
                                 rateLimiterConfigSpec.setWorkloadSelector(workloadSelector);
 
-                                rateLimiterConfigSpec.getRateLimitProperty().setDomain("different-domain");
-                                rateLimiterConfigSpec.getRateLimitProperty().getDescriptors()
+                                rateLimiterConfigSpec.getDescriptors()
                                         .forEach(d -> d.setKey("another-header-key").setValue("another-header-val"));
-                                rateLimiterConfigSpec.getRateLimitProperty().getDescriptors()
+                                rateLimiterConfigSpec.getDescriptors()
                                         .forEach(d -> d.getRateLimit().setRequestsPerUnit(10));
                             }))
                     .validateRatelimiterConfig()
@@ -384,32 +382,18 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
         try (
                 RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
         ) {
-
             rateLimiterProcessor
                     .create(rateLimiter)
                     .validateRateLimiterDeployment()
                     .validateRedisDeployment()
                     .editRedisDeployment(deployment -> {
                         deployment.getSpec().setReplicas(5);
-                        deployment.getSpec().getTemplate().getMetadata().getLabels().put("app7","label32");
-                        deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getPorts().get(0)
-                                .setContainerPort(1234);
-                        deployment.getSpec().getTemplate().getSpec().setTerminationGracePeriodSeconds(70L);
-                        deployment.getSpec().setRevisionHistoryLimit(25);
                     })
-                    .validateRedisDeployment()
+                    .validateRateLimiterDeployment()
                     .editRateLimiterDeployment(deployment -> {
                         deployment.getSpec().setReplicas(4);
-                        deployment.getSpec().getTemplate().getMetadata().getLabels().put("app3","label3");
-                        deployment.getSpec().getTemplate().getSpec().getVolumes().get(0).getConfigMap().setName("test-test");
-                        deployment.getSpec().getTemplate().getSpec().getVolumes().get(0)
-                                .getConfigMap().setName("newConfigMapName");
-                        deployment.getSpec().getTemplate().getSpec().getContainers().get(0)
-                                .setImagePullPolicy("IfNotPresent");
-                        deployment.getSpec().setProgressDeadlineSeconds(60);
-
                     })
-                    .validateRateLimiterDeployment();
+                    .validateRedisDeployment();
         }
     }
 
@@ -429,11 +413,10 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
             rateLimiterProcessor.create(rateLimiter);
             rateLimiterConfigProcessor
                     .create(rateLimiterConfig)
-                    .editConfigMap(rateLimitProperty -> {
-                        rateLimitProperty.setDomain("new_Domain");
-                        rateLimitProperty.getDescriptors().get(0).setValue("new_value2");
-                        rateLimitProperty.getDescriptors().get(0).setKey("new_Key456");
-                        rateLimitProperty.getDescriptors().get(0).getRateLimit().setRequestsPerUnit(10);
+                    .editConfigMap(rateLimitDescriptors -> {
+                        rateLimitDescriptors.get(0).setValue("new_value2");
+                        rateLimitDescriptors.get(0).setKey("new_Key456");
+                        rateLimitDescriptors.get(0).getRateLimit().setRequestsPerUnit(10);
                     })
                     .validateConfigMap();
         }
@@ -459,12 +442,23 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
 
         RateLimiterConfig.RateLimiterConfigDescriptors rateLimiterConfigDescriptors =
                 new RateLimiterConfig.RateLimiterConfigDescriptors()
-                        .setKey("header-key").setValue("header-val")
+                        .setKey("header-key")
+                        .setValue("header-val")
                         .setRateLimit(rateLimit);
 
-        RateLimiterConfig.RateLimitProperty rateLimitProperty = new RateLimiterConfig.RateLimitProperty()
-                .setDescriptors(Collections.singletonList(rateLimiterConfigDescriptors))
-                .setDomain("host-info");
+        List<RateLimiterConfig.RateLimiterConfigDescriptors> descriptors =
+                Collections.singletonList(rateLimiterConfigDescriptors);
+
+        var action = new EnvoyGatewayPatch.RateLimitAction()
+                .setRequestHeaders(
+                        new EnvoyGatewayPatch.ActionRequestHeader()
+                                .setDescriptionKey("header-key")
+                                .setHeaderName("header-key"));
+
+        var envoyFilterRateLimit = new EnvoyGatewayPatch.GatewayRateLimit()
+                .setActions(Collections.singletonList(action));
+
+        var rateLimits = Collections.singletonList(envoyFilterRateLimit);
 
         RateLimiterConfig.RateLimiterConfigSpec rateLimiterConfigSpec =
                 new RateLimiterConfig.RateLimiterConfigSpec()
@@ -472,7 +466,8 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                         .setHost("host-info-srv.org")
                         .setPort(80)
                         .setRateLimiter("rate-limiter-test")
-                        .setRateLimitProperty(rateLimitProperty)
+                        .setDescriptors(descriptors)
+                        .setRateLimits(rateLimits)
                         .setRateLimitRequestTimeout("1s")
                         .setWorkloadSelector(new WorkloadSelector(Collections.singletonMap("app", "application-app")));
 
@@ -481,6 +476,4 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                 .spec(rateLimiterConfigSpec)
                 .build();
     }
-
-
 }

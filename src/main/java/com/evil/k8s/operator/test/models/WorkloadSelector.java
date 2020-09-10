@@ -7,10 +7,6 @@ import lombok.ToString;
 
 import java.util.Map;
 
-
-/**
- *
- */
 @JsonInclude(JsonInclude.Include.NON_EMPTY)
 @ToString
 @EqualsAndHashCode
