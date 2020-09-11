@@ -388,12 +388,25 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .validateRedisDeployment()
                     .editRedisDeployment(deployment -> {
                         deployment.getSpec().setReplicas(5);
+                        deployment.getSpec().getTemplate().getMetadata().getLabels().put("app7", "label32");
+                        deployment.getSpec().getTemplate().getSpec().getContainers().get(0).getPorts().get(0)
+                                .setContainerPort(1234);
+                        deployment.getSpec().getTemplate().getSpec().setTerminationGracePeriodSeconds(70L);
+                        deployment.getSpec().setRevisionHistoryLimit(25);
                     })
-                    .validateRateLimiterDeployment()
+                    .validateRedisDeployment()
                     .editRateLimiterDeployment(deployment -> {
                         deployment.getSpec().setReplicas(4);
+                        deployment.getSpec().getTemplate().getMetadata().getLabels().put("app3", "label3");
+                        deployment.getSpec().getTemplate().getSpec().getVolumes().get(0).getConfigMap().setName("test-test");
+                        deployment.getSpec().getTemplate().getSpec().getVolumes().get(0)
+                                .getConfigMap().setName("newConfigMapName");
+                        deployment.getSpec().getTemplate().getSpec().getContainers().get(0)
+                                .setImagePullPolicy("IfNotPresent");
+                        deployment.getSpec().setProgressDeadlineSeconds(60);
+
                     })
-                    .validateRedisDeployment();
+                    .validateRateLimiterDeployment();
         }
     }
 
@@ -449,16 +462,16 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
         List<RateLimiterConfig.RateLimiterConfigDescriptors> descriptors =
                 Collections.singletonList(rateLimiterConfigDescriptors);
 
-        var action = new EnvoyGatewayPatch.RateLimitAction()
+        EnvoyGatewayPatch.RateLimitAction action = new EnvoyGatewayPatch.RateLimitAction()
                 .setRequestHeaders(
                         new EnvoyGatewayPatch.ActionRequestHeader()
                                 .setDescriptionKey("header-key")
                                 .setHeaderName("header-key"));
 
-        var envoyFilterRateLimit = new EnvoyGatewayPatch.GatewayRateLimit()
+        EnvoyGatewayPatch.GatewayRateLimit envoyFilterRateLimit = new EnvoyGatewayPatch.GatewayRateLimit()
                 .setActions(Collections.singletonList(action));
 
-        var rateLimits = Collections.singletonList(envoyFilterRateLimit);
+        List<EnvoyGatewayPatch.GatewayRateLimit> rateLimits = Collections.singletonList(envoyFilterRateLimit);
 
         RateLimiterConfig.RateLimiterConfigSpec rateLimiterConfigSpec =
                 new RateLimiterConfig.RateLimiterConfigSpec()
