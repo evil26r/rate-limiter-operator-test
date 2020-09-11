@@ -54,21 +54,14 @@ public class RateLimiterConfig implements HasMetadata, Namespaced {
         private int port;
         private String rateLimiter;
         private boolean failureModeDeny;
-        private RateLimitProperty rateLimitProperty;
         private String rateLimitRequestTimeout;
         @JsonInclude(JsonInclude.Include.NON_NULL)
         private WorkloadSelector workloadSelector;
-    }
-
-    @Data
-    @Accessors(chain = true)
-    @JsonDeserialize
-    @NoArgsConstructor
-    @AllArgsConstructor
-    public static class RateLimitProperty {
         @JsonInclude(JsonInclude.Include.NON_ABSENT)
         private List<RateLimiterConfigDescriptors> descriptors;
-        private String domain;
+        @JsonInclude(JsonInclude.Include.NON_ABSENT)
+        private List<EnvoyGatewayPatch.GatewayRateLimit> rateLimits;
+
     }
 
     @Data

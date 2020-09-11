@@ -1,5 +1,6 @@
 package com.evil.k8s.operator.test;
 
+import com.evil.k8s.operator.test.models.ConfigMapRateLimitProperty;
 import com.evil.k8s.operator.test.models.EnvoyClusterPatch;
 import com.evil.k8s.operator.test.models.EnvoyGatewayPatch;
 import com.evil.k8s.operator.test.models.EnvoyHttpFilterPatch;
@@ -9,7 +10,11 @@ import io.fabric8.kubernetes.api.model.ConfigMap;
 import lombok.RequiredArgsConstructor;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
-import me.snowdrop.istio.api.networking.v1alpha3.*;
+import me.snowdrop.istio.api.networking.v1alpha3.ClusterObjectTypes;
+import me.snowdrop.istio.api.networking.v1alpha3.EnvoyConfigObjectPatch;
+import me.snowdrop.istio.api.networking.v1alpha3.EnvoyFilter;
+import me.snowdrop.istio.api.networking.v1alpha3.ListenerObjectTypes;
+import me.snowdrop.istio.api.networking.v1alpha3.RouteConfigurationObjectTypes;
 
 import java.util.HashSet;
 import java.util.LinkedList;
@@ -52,19 +57,20 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         String configMapDescriptors = configData
                 .get(currentRateLimiterConfig.getMetadata().getName() + ".yaml");
         assertNotNull(configMapDescriptors, "Config map data is Null for file:" + currentRateLimiterConfig.getMetadata().getName());
-        RateLimiterConfig.RateLimitProperty configMapRateLimitProperty =
-                YAML_MAPPER.readValue(configMapDescriptors, RateLimiterConfig.RateLimitProperty.class);
-        assertEquals(configMapRateLimitProperty, currentRateLimiterConfig.getSpec().getRateLimitProperty());
+
+        ConfigMapRateLimitProperty configMapRateLimitProperty =
+                YAML_MAPPER.readValue(configMapDescriptors, ConfigMapRateLimitProperty.class);
+        assertEquals(configMapRateLimitProperty.getDescriptors(), currentRateLimiterConfig.getSpec().getDescriptors());
 
         List<String> domains = configData.values().stream()
                 .map(descriptors -> {
                     try {
-                        return YAML_MAPPER.readValue(descriptors, RateLimiterConfig.RateLimitProperty.class);
+                        return YAML_MAPPER.readValue(descriptors, ConfigMapRateLimitProperty.class);
                     } catch (JsonProcessingException e) {
                         throw new RuntimeException(e);
                     }
                 })
-                .map(RateLimiterConfig.RateLimitProperty::getDomain)
+                .map(ConfigMapRateLimitProperty::getDomain)
                 .collect(Collectors.toList());
         assertEquals(domains.size(), new HashSet<>(domains).size(), "Exists not unique domain!!!");
         return this;
@@ -103,7 +109,7 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
         // patch -> value -> config -> {domain , ...->cluster_name}
         EnvoyHttpFilterPatch envoyRateLimit = YAML_MAPPER.convertValue(envoyFilterConfigPatchesHttpFilter.getPatch().getValue(), EnvoyHttpFilterPatch.class);
         assertEquals("envoy.rate_limit", envoyRateLimit.getName());
-        assertEquals(currentRateLimiterConfig.getSpec().getRateLimitProperty().getDomain(), envoyRateLimit.getConfig().getDomain());
+        assertEquals(currentRateLimiterConfig.getMetadata().getName(), envoyRateLimit.getConfig().getDomain());
         assertEquals("patched." + rateLimiterName + "." + namespace + ".svc.cluster.local",
                 envoyRateLimit.getConfig().getRateLimitService().getGrpcService().getEnvoyGrpc().getCluster_name());
         assertEquals(currentRateLimiterConfig.getSpec().getRateLimitRequestTimeout(),
@@ -156,12 +162,8 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
 
         // patch -> value -> rate_limits->actions->request_headers->{descriptor_key, header_name}
         EnvoyGatewayPatch envoyClusterPatch = YAML_MAPPER.convertValue(envoyFilterConfigPatchesVirtualHost.getPatch().getValue(), EnvoyGatewayPatch.class);
-        assertEquals(currentRateLimiterConfig.getSpec().getRateLimitProperty().getDescriptors().get(0).getKey(),
-                envoyClusterPatch.getRateLimits().get(0).getActions().get(0).getRequestHeaders().getDescriptionKey());
-        assertEquals(currentRateLimiterConfig.getSpec().getRateLimitProperty().getDescriptors().get(0).getKey(),
-                envoyClusterPatch.getRateLimits().get(0).getActions().get(0).getRequestHeaders().getHeaderName());
 
-        //ToDo: Расскомментировать
+        assertEquals(currentRateLimiterConfig.getSpec().getRateLimits(), envoyClusterPatch.getRateLimits());
         assertEquals(currentRateLimiterConfig.getSpec().getWorkloadSelector().getLabels(), envoyFilter.getSpec().getWorkloadSelector().getLabels());
 
         return this;
@@ -211,17 +213,17 @@ public class RateLimiterConfigProcessor implements AutoCloseable {
     }
 
     @SneakyThrows
-    public RateLimiterConfigProcessor editConfigMap(Consumer<RateLimiterConfig.RateLimitProperty> rateLimitPropertyConsumer) {
+    public RateLimiterConfigProcessor editConfigMap(Consumer<List<RateLimiterConfig.RateLimiterConfigDescriptors>> rateLimitDescriptorsConsumer) {
 
         ConfigMap configMap = requester.getConfigMap(currentRateLimiterConfig.getSpec().getRateLimiter()).get();
         Map<String, String> configData = configMap.getData();
         String yamlFileName = currentRateLimiterConfig.getMetadata().getName() + ".yaml";
         String configMapDescriptors = configData.get(yamlFileName);
 
-        RateLimiterConfig.RateLimitProperty configMapRateLimitProperty =
-                YAML_MAPPER.readValue(configMapDescriptors, RateLimiterConfig.RateLimitProperty.class);
+        ConfigMapRateLimitProperty configMapRateLimitProperty =
+                YAML_MAPPER.readValue(configMapDescriptors, ConfigMapRateLimitProperty.class);
 
-        rateLimitPropertyConsumer.accept(configMapRateLimitProperty);
+        rateLimitDescriptorsConsumer.accept(configMapRateLimitProperty.getDescriptors());
 
         configData.replace(yamlFileName, YAML_MAPPER.writeValueAsString(configMapRateLimitProperty));
 

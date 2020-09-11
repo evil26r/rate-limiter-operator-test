@@ -1,5 +1,6 @@
 package com.evil.k8s.operator.test;
 
+import com.evil.k8s.operator.test.models.ConfigMapRateLimitProperty;
 import com.evil.k8s.operator.test.models.RateLimiter;
 import com.evil.k8s.operator.test.models.RateLimiterConfig;
 import com.fasterxml.jackson.core.JsonProcessingException;
@@ -91,7 +92,6 @@ public class RateLimiterProcessor implements AutoCloseable {
     }
 
     public RateLimiterProcessor validateRedisDeployment(RateLimiter rateLimiter) {
-        log.info("Check Redis deployment");
         String redisName = generateRedisName(rateLimiter.getMetadata().getName());
         Deployment redisDeployment = requester.getDeployment(redisName);
 
@@ -130,11 +130,11 @@ public class RateLimiterProcessor implements AutoCloseable {
         String name = rateLimiter.getMetadata().getName();
         Map<String, String> data = requester.getConfigMap(name).get().getData();
         if (data != null) {
-            List<RateLimiterConfig.RateLimitProperty> rateLimitersConfig = data.values()
+            List<ConfigMapRateLimitProperty> rateLimitersConfig = data.values()
                     .stream()
                     .map(s -> {
                         try {
-                            return YAML_MAPPER.readValue(s, RateLimiterConfig.RateLimitProperty.class);
+                            return YAML_MAPPER.readValue(s, ConfigMapRateLimitProperty.class);
                         } catch (JsonProcessingException e) {
                             throw new RuntimeException(e);
                         }
@@ -142,11 +142,11 @@ public class RateLimiterProcessor implements AutoCloseable {
                     .collect(Collectors.toList());
 
             Collection<String> allDomains = rateLimitersConfig.stream()
-                    .map(RateLimiterConfig.RateLimitProperty::getDomain)
+                    .map(ConfigMapRateLimitProperty::getDomain)
                     .collect(Collectors.toList());
 
             Collection<String> distinctDomain = rateLimitersConfig.stream()
-                    .map(RateLimiterConfig.RateLimitProperty::getDomain)
+                    .map(ConfigMapRateLimitProperty::getDomain)
                     .collect(Collectors.toSet());
 
             assertEquals(distinctDomain.size(), allDomains.size(), "Exist not unique domains");

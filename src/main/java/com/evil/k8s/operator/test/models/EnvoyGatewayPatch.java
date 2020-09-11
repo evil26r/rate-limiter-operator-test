@@ -1,12 +1,12 @@
 package com.evil.k8s.operator.test.models;
 
-
 import com.fasterxml.jackson.annotation.JsonProperty;
 import com.fasterxml.jackson.databind.annotation.JsonDeserialize;
 import lombok.AllArgsConstructor;
 import lombok.Builder;
 import lombok.Data;
 import lombok.NoArgsConstructor;
+import lombok.experimental.Accessors;
 
 import java.util.List;
 
@@ -16,6 +16,7 @@ import java.util.List;
 @NoArgsConstructor
 @AllArgsConstructor
 public class EnvoyGatewayPatch {
+
     @JsonProperty("rate_limits")
     private List<GatewayRateLimit> rateLimits;
 
@@ -24,7 +25,8 @@ public class EnvoyGatewayPatch {
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class GatewayRateLimit{
+    @Accessors(chain = true)
+    public static class GatewayRateLimit {
         private List<RateLimitAction> actions;
     }
 
@@ -33,7 +35,8 @@ public class EnvoyGatewayPatch {
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class RateLimitAction{
+    @Accessors(chain = true)
+    public static class RateLimitAction {
         @JsonProperty("request_headers")
         private ActionRequestHeader requestHeaders;
     }
@@ -43,7 +46,8 @@ public class EnvoyGatewayPatch {
     @JsonDeserialize
     @NoArgsConstructor
     @AllArgsConstructor
-    public static class ActionRequestHeader{
+    @Accessors(chain = true)
+    public static class ActionRequestHeader {
         @JsonProperty("descriptor_key")
         private String descriptionKey;
         @JsonProperty("header_name")
