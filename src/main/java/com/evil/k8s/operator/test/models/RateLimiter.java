@@ -81,7 +81,6 @@ public class RateLimiter {
     @NoArgsConstructor
     @AllArgsConstructor
     public static class RateLimiterSpec {
-        private int port;
         private int size;
         private String logLevel;
     }

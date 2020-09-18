@@ -1,18 +1,14 @@
 package com.evil.k8s.operator.test;
 
-import com.evil.k8s.operator.test.models.EnvoyGatewayPatch;
-import com.evil.k8s.operator.test.models.EnvoyHttpFilterPatch;
-import com.evil.k8s.operator.test.models.RateLimiter;
-import com.evil.k8s.operator.test.models.RateLimiterConfig;
-import com.evil.k8s.operator.test.models.WorkloadSelector;
+import com.evil.k8s.operator.test.models.*;
 import io.fabric8.kubernetes.api.model.IntOrString;
 import io.fabric8.kubernetes.api.model.ObjectMeta;
 import io.fabric8.kubernetes.api.model.ServicePort;
 import io.fabric8.kubernetes.api.model.ServiceSpec;
-import io.fabric8.kubernetes.client.KubernetesClientException;
 import lombok.SneakyThrows;
 import lombok.extern.slf4j.Slf4j;
 import me.snowdrop.istio.api.networking.v1alpha3.EnvoyConfigObjectPatch;
+import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.Test;
 
 import java.util.Collections;
@@ -110,39 +106,16 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
 
     /**
      * Создание рейтлимитер конфига без рейтлимитера.
-     * Ожидаемое поведение: При создании рейтлимитера - создадутся необходимые для работы ресурсы.
+     * Ожидаемое поведение: При создании webhook выбросит ошибку
+     * ToDo: при добавлении webhook уточнить ошибку
      */
     @Test
     public void createRateLimiterConfigWithOutRateLimiter() {
         RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
         try (
-                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
                 RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
         ) {
-            rateLimiterConfigProcessor
-                    .create(rateLimiterConfig)
-                    .validateRatelimiterConfig();
-            try {
-                rateLimiterConfigProcessor.validateEnvoyFilter();
-                throw new RuntimeException("RateLimiter doesn't exists, but exist EnvoyFilter");
-            } catch (KubernetesClientException ex) {
-                if (ex.getStatus().getMessage().equals("envoyfilters.networking.istio.io \"" + rateLimiterConfig.getMetadata().getName() + "\" not found")) {
-                    log.info("", ex);
-                } else {
-                    throw new RuntimeException(ex);
-                }
-            }
-            rateLimiterProcessor
-                    .create(preparedRateLimiter())
-                    .validateRateLimiterDeployment()
-                    .validateRedisDeployment()
-                    .validateConfigMap()
-                    .validateServices();
-
-            rateLimiterConfigProcessor
-                    .validateRatelimiterConfig()
-                    .validateEnvoyFilter()
-                    .validateConfigMap();
+            Assertions.assertThrows(Exception.class, () -> rateLimiterConfigProcessor.create(rateLimiterConfig));
         }
     }
 
@@ -173,7 +146,13 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
                     .validateConfigMap()
                     .validateEnvoyFilter();
 
-            rateLimiterProcessor.delete()
+            rateLimiterProcessor
+                    .delete()
+                    .validateServices()
+                    .validateRateLimiter()
+                    .validateConfigMap()
+                    .validateRateLimiterDeployment()
+                    .validateRedisDeployment()
                     .create(rateLimiter)
                     .validateRateLimiterDeployment()
                     .validateRedisDeployment()
@@ -435,13 +414,51 @@ class RateLimitTest extends K8sRateLimitAbstractTest {
         }
     }
 
+    @Test
+    void deleteRateLimiterConfigAfterRateLimiter() {
+        RateLimiter rateLimiter = preparedRateLimiter();
+        RateLimiterConfig rateLimiterConfig = preparedRateLimiterConfig();
+        try (
+                RateLimiterProcessor rateLimiterProcessor = new RateLimiterProcessor(requester);
+                RateLimiterConfigProcessor rateLimiterConfigProcessor = new RateLimiterConfigProcessor(requester);
+        ) {
+            rateLimiterProcessor
+                    .create(rateLimiter)
+                    .validateRateLimiter()
+                    .validateRedisDeployment()
+                    .validateRateLimiterDeployment()
+                    .validateConfigMap()
+                    .validateServices();
+
+            rateLimiterConfigProcessor
+                    .create(rateLimiterConfig)
+                    .validateRatelimiterConfig()
+                    .validateEnvoyFilter()
+                    .validateConfigMap();
+
+            rateLimiterProcessor
+                    .delete()
+                    .validateRateLimiter()
+                    .validateRateLimiterDeployment()
+                    .validateRedisDeployment()
+                    .validateConfigMap()
+                    .validateServices();
+
+            rateLimiterConfigProcessor
+                    .delete()
+                    .validateRatelimiterConfig()
+                    .validateConfigMap()
+                    .validateEnvoyFilter();
+        }
+    }
+
     private RateLimiter preparedRateLimiter() {
         return new RateLimiter(client)
                 .updateMetadata(objectMeta -> {
                     objectMeta.setName(rateLimiterName);
                     objectMeta.setNamespace(namespace);
                 })
-                .setSpec(new RateLimiter.RateLimiterSpec(8088, 1, "INFO"));
+                .setSpec(new RateLimiter.RateLimiterSpec(1, "INFO"));
     }
 
     private RateLimiterConfig preparedRateLimiterConfig() {
